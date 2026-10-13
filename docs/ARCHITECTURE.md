@@ -63,7 +63,7 @@ binary: thepeer                                   |
                           |
                           v
                 saorsa-transport 0.37.0
-                Exact revision + five reviewed local patches
+                Exact revision + three reviewed local patches
                           |
                           v
                 QUIC/TLS, UDP sockets, OS networking
@@ -140,18 +140,14 @@ Application grant:
 All three matter. A reachable address or valid TLS peer alone is not authorization.
 ```
 
-### Why we carry five patches
-
-- **0001:** Opt-in forwarding policy/limits and a local allocator.
-- **0002:** Bounded established-stream socket and lifecycle controls.
+### Why we carry three patches
 - **0003:** Bound client relay-response collection.
 - **0004:** Caller-owned cancellable attempts and retained accepted connections.
 - **0005:** Constructor-installed handshake hooks, including virtual ingress.
 
-0001/0002 originated in retired relay experiments; preserving their reviewed opt-in
-interfaces does not mean thepeer operates a relay service. All five remain in the
-build stack. These are local extensions, not claimed upstream-merged changes.
-They do not replace upstream cryptography or require remote participants to adopt
+Relay socket construction and forwarding use upstream's existing implementation;
+thepeer does not operate a relay service. These three local patches are not claimed
+upstream-merged changes. They do not replace upstream cryptography or require remote participants to adopt
 a new wire protocol. Exact hashes, scope and limitations are in the
 [patch documentation](../patches/saorsa-transport/README.md).
 

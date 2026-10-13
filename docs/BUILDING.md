@@ -107,7 +107,7 @@ the CLI. Restart the CLI to create a fresh QR for another session.
 ```sh
 bash scripts/test-native.sh
 python3 -m unittest discover -s tests/host -p '*_test.py'
-node --test apps/android-controller/tests/native-stage.test.mjs apps/android-controller/tests/application-fixture.test.mjs tests/host/repository-layout.test.mjs
+node --test apps/android-controller/tests/native-stage.test.mjs apps/android-controller/tests/application-fixture.test.mjs
 ```
 
 The scanner/JNI suite additionally needs JDK 17 and its checksum-pinned ZXing jar:

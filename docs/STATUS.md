@@ -26,7 +26,7 @@ Ignored local build/dependency artifacts were preserved under
 ## Invariants
 
 Saorsa remains 0.37.0 at `e2f08388088313c82cac393afa6ca27b9ce00516` with unchanged
-reviewed patches 0001–0005. No Cargo-cache edits or transport upgrades.
+reviewed patches 0003–0005. No Cargo-cache edits or transport upgrades.
 The sole `wpa2:` codec rejects retired coordination flag 1 and bounds text to
 195 bytes. Authenticate the intended computer on the retained TLS connection
 before sending the scoped grant. Only classified no-response permits fallback;

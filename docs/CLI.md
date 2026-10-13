@@ -156,8 +156,9 @@ nothing. It exercises the real CLI terminal QR → scanner → Java/JNI → brow
 → Stop path, plus scanner/handoff and receipt checks. All network fixtures are local.
 
 For repeated checks, `THEPEER_PREPARED_WORKSPACE` may point to a trusted prepared tree;
-tooling rejects stale workspace sources/manifests/lockfiles. Do not modify Cargo's
-cached upstream checkout. Reuse a target directory and disable incremental builds
+tooling checks workspace sources, manifests, lockfiles and the preparation-input
+receipt. Missing receipts or changed patch inputs require fresh preparation.
+Do not modify Cargo's cached upstream checkout. Reuse a target directory and disable incremental builds
 rather than accumulating duplicate build trees.
 
 Pre-split physical checks passed Direct on Wi-Fi and Relay on cellular, including

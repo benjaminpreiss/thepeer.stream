@@ -15,7 +15,7 @@ operation has been performed by the agent during this cleanup.
 
 ## Current host checkpoint
 
-The shared core and separate CLI have 89 + 4 passing Rust tests.
+The shared core and separate CLI have 100 + 5 passing Rust tests.
 The real helper terminal QR → scanner → Java/JNI → browser HTTP/body/header checks → Stop
 suite passes, including automatic bind and socket release. These are local host
 fixtures, not a physical camera, cellular benchmark or public NAT guarantee.
@@ -23,7 +23,7 @@ fixtures, not a physical camera, cellular benchmark or public NAT guarantee.
 Current code has one Direct/Relay router, no coordination stage, no legacy offer
 translation and a 195-byte `wpa2:` text bound. The foreground owner moved to
 `crates/tunnel-android`; shared policy is in `crates/tunnel-core`. Transport remains
-0.37.0 at the exact reviewed revision with unchanged patches 0001–0005.
+0.37.0 at the exact reviewed revision with reviewed patches 0003–0005.
 
 ## Repeat after cleanup
 

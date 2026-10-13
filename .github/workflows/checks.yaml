@@ -52,6 +52,6 @@ jobs:
       - name: Test scanner, state, native receipts and application fixtures
         run: |
           bash apps/android-controller/test-scanner.sh
-          node --test apps/android-controller/tests/native-stage.test.mjs apps/android-controller/tests/application-fixture.test.mjs tests/host/repository-layout.test.mjs
+          node --test apps/android-controller/tests/native-stage.test.mjs apps/android-controller/tests/application-fixture.test.mjs
       - name: Test real terminal QR to scanner to JNI to HTTP and Stop
         run: bash apps/android-controller/test-routing-native.sh

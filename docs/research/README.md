@@ -12,7 +12,8 @@ transport products, relay hosting and coordinated-punching designs have been rem
 ## Transport selection and security
 
 - [Upstream route selection and the selected Direct/Relay policy](saorsa-route-selection-reassessment.md)
-- [Why the reviewed transport patches remain necessary](saorsa-upstream-divergence.md)
+- [Current transport divergence](saorsa-upstream-divergence.md)
+- [Which patches the current Direct/Relay scope needs](current-scope-patch-audit.md)
 - [Inner peer TLS and relay trust boundaries](saorsa-upstream-relay-security.md)
 - [Bounded public participant evidence](saorsa-public-participant-probe.md)
 - [Retained-peer application authorization](saorsa-peer-application-integration.md)

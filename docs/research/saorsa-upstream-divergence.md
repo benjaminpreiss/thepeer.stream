@@ -26,20 +26,17 @@ accepts coordinator-requested outgoing handshakes. These are application choices
 not global restrictions on ordinary upstream consumers. See
 [the hook boundary](saorsa-handshake-hook-adapter.md).
 
-## Preserved patch stack
+## Current patch stack
 
-| Patch | Purpose |
-| --- | --- |
-| 0001 | Opt-in forwarding policy/pacing and loopback allocator |
-| 0002 | Bounded established-stream socket construction and lifecycle access |
-| 0003 | Bounded client relay-response collection |
-| 0004 | Caller-owned dialing, atomic abort classification and accepted handles |
-| 0005 | Generic handshake ownership, virtual admission and constructor installation |
+- **0003:** Bounded client relay-response collection.
+- **0004:** Caller-owned dialing, atomic abort classification and accepted handles.
+- **0005:** Generic handshake ownership, virtual admission and constructor installation.
 
-All five reviewed patches are still applied, unchanged. 0001/0002 originated in
-relay-service work that is no longer part of the product; their opt-in interfaces
-remain in the reviewed stack. Removing them would be a separate transport change,
-not documentation cleanup. No relay service is operated by this application.
+These three reviewed patches are applied with their original numbers and bytes.
+Relay forwarding and socket construction use upstream's existing implementation;
+no relay service is operated by this application. The
+[current-scope audit](current-scope-patch-audit.md) records call-site evidence and
+validation of this stack.
 
 The authoritative hashes, application order, API limits and upstream MIT notice
 are in the [patch stack](../../patches/saorsa-transport/README.md). Preparation

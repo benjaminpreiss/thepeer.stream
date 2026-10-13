@@ -9,7 +9,7 @@ tests, build tooling and notices together, including newly added files.
 The supported design is eligible Direct → prepared single-carrier MASQUE Relay.
 No coordinated punching, legacy viewer/relay offers, browser-owned tunnel, grant
 files or automatic reconnect belong to this MVP. Saorsa stays at 0.37.0, revision
-`e2f08388088313c82cac393afa6ca27b9ce00516`, with the same five reviewed patches.
+`e2f08388088313c82cac393afa6ca27b9ce00516`, with reviewed patches 0003–0005.
 
 ## Cleanup/package split
 
@@ -54,12 +54,11 @@ build/dependency artifacts were moved to `target/retired-local-artifacts/`, not 
 
 Host evidence after restructuring:
 
-- 90 core Rust tests and four desktop bind/argument tests.
+- 100 core Rust tests and five CLI bind/argument tests with the three-patch stack.
 - Real helper terminal QR → scanner → Java/JNI → browser HTTP/body/header checks → Stop;
   preparation cancellation, automatic bind and socket release included.
-- Scanner, 34 presentation and 23 handoff checks; five native receipt checks
-  (including Node/Gradle input-list parity), two application-fixture checks and a
-  repository-layout check that requires obsolete source trees to be absent.
+- Scanner, 34 presentation and 23 handoff checks; native receipt checks
+  (including Node/Gradle input-list parity) and two application-fixture checks.
 - Separate Android-package host compilation without the core `host` feature.
 
 The previous 157-test milestone included retired designs; it is not the current

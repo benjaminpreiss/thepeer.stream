@@ -19,8 +19,6 @@ work=$(mktemp -d "$base/run.XXXXXX")
 native="$work/tree"
 mkdir -p "$work/saorsa" "$native/crates"
 patches=(
-  "$root/patches/saorsa-transport/0001-stream-forwarding-policy.patch"
-  "$root/patches/saorsa-transport/0002-bounded-stream-socket.patch"
   "$root/patches/saorsa-transport/0003-client-relay-response-bound.patch"
   "$root/patches/saorsa-transport/0004-cancellable-peer-attempt.patch"
   "$root/patches/saorsa-transport/0005-peer-handshake-hook.patch"
@@ -30,8 +28,6 @@ python3 - "${patches[@]}" <<'PY'
 from pathlib import Path
 import hashlib,sys
 expected=[
-    '761cb44c54c20ce852ac416f41a91fbbf2a70553e2f69515494727423e4b5ae3',
-    '53a792b581ac9dc6865f8c1b392452208f270e72a763729a603b9bbc7dc54e73',
     '6c55a783245e3045d9cf852bfa5836fb0b15528542da6d903c0b3f14f038d04d',
     'f68612aed60d8df84ceeb3bba85a14b06cc145d1596567cb335d3a4183217dba',
     '5f4f7e02a92fd01e5bcb721958b633574e1d8da8eeeacd6475803886cd19e386',
@@ -50,10 +46,11 @@ for patch in "${patches[@]}"; do
 done
 cp "$root/Cargo.toml" "$root/Cargo.lock" "$native/"
 cp -R "$root/crates/tunnel-core" "$root/crates/tunnel-android" "$root/crates/cli" "$native/crates/"
-python3 - "$work" "$native" "$revision" <<'PY'
+python3 - "$work" "$native" "$revision" "$root" "${patches[@]}" <<'PY'
 from pathlib import Path
-import json,sys
+import hashlib,json,sys
 work,native=map(Path,sys.argv[1:3]); revision=sys.argv[3]
+root=Path(sys.argv[4]); patches=list(map(Path,sys.argv[5:]))
 lock=native/'Cargo.lock'
 source=f'source = "git+https://github.com/WithAutonomi/saorsa-transport?rev={revision}#{revision}"\n'
 text=lock.read_text()
@@ -61,6 +58,11 @@ if text.count(source)!=1: raise SystemExit('Expected exactly one pinned Saorsa s
 lock.write_text(text.replace(source,''))
 with (native/'Cargo.toml').open('a') as f:
     f.write('\n[patch."https://github.com/WithAutonomi/saorsa-transport"]\nsaorsa-transport = { path = '+json.dumps(str(work/'saorsa'))+' }\n')
+digest=lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+(native/'preparation.json').write_text(json.dumps({
+    'recipe': digest(root/'patches/saorsa-transport/prepare-native.sh'),
+    'patches': {path.name: digest(path) for path in patches},
+}, sort_keys=True)+'\n')
 PY
 printf 'Pinned revision: %s\nPrepared source: %s\n' "$revision" "$work" >&2
 shasum -a 256 "${patches[@]}" >&2

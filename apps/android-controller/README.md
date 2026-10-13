@@ -38,7 +38,7 @@ bash apps/android-controller/native-build.sh
 ```
 
 This builds `crates/tunnel-android` from the shared Rust workspace for arm64/API 26,
-using the exact Saorsa revision plus reviewed patches 0001–0005. The JNI library
+using the exact Saorsa revision plus reviewed patches 0003–0005. The JNI library
 name remains `libcontroller_saorsa_probe.so`; the routing marker and receipt remain
 `web_p2p_routing_client_v2` / `saorsa-routing-v2`. The old native target directory
 is retained only as an NDK cache, not as a source package.

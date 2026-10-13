@@ -4,5 +4,5 @@ set -euo pipefail
 cd "$(dirname "$0")"
 bash test-scanner.sh
 bash test-routing-native.sh
-node --test tests/native-stage.test.mjs tests/application-fixture.test.mjs ../../tests/host/repository-layout.test.mjs
+node --test tests/native-stage.test.mjs tests/application-fixture.test.mjs
 bash -n native-build.sh

@@ -32,7 +32,6 @@ test('staging requires matching pre-build inputs, including patches and source m
   assert.deepEqual(verifySnapshot(expected), expected);
   for (const name of ['../../crates/tunnel-android/src/lib.rs',
     '../../crates/tunnel-core/src/application.rs',
-    '../../patches/saorsa-transport/0001-stream-forwarding-policy.patch',
     '../../patches/saorsa-transport/0003-client-relay-response-bound.patch',
     '../../patches/saorsa-transport/0004-cancellable-peer-attempt.patch',
     '../../patches/saorsa-transport/0005-peer-handshake-hook.patch']) {
@@ -46,6 +45,18 @@ test('staging requires matching pre-build inputs, including patches and source m
   assert.throws(() => verifySnapshot({ ...expected, transport: 'unpatched' }));
   assert.throws(() => verifySnapshot({ ...expected, transport: 'saorsa-relay-v1' }));
   assert.throws(() => verifySnapshot(undefined));
+});
+test('only the three active transport patches are receipt inputs; five-patch receipts are rejected', () => {
+  const patches = sourceNames().filter(name => name.endsWith('.patch'));
+  assert.deepEqual(patches, [
+    '../../patches/saorsa-transport/0003-client-relay-response-bound.patch',
+    '../../patches/saorsa-transport/0004-cancellable-peer-attempt.patch',
+    '../../patches/saorsa-transport/0005-peer-handshake-hook.patch',
+  ]);
+  const old = sourceSnapshot();
+  old.sources['../../patches/saorsa-transport/0001-stream-forwarding-policy.patch'] = '0'.repeat(64);
+  old.sources['../../patches/saorsa-transport/0002-bounded-stream-socket.patch'] = '0'.repeat(64);
+  assert.throws(() => verifySnapshot(old), /changed during/);
 });
 test('Gradle and Node enumerate the same workspace receipt inputs', () => {
   const gradle = readFileSync(new URL('../app/build.gradle.kts', import.meta.url), 'utf8');
@@ -65,8 +76,6 @@ test('native source receipt covers pinned dependencies, runtime, JNI bridge and 
     '../../crates/tunnel-core/src/pin.rs', '../../crates/tunnel-android/src/lib.rs',
     '../../crates/tunnel-android/src/routing_owner.rs', 'native-build.sh', 'native-stage.mjs',
     '../../patches/saorsa-transport/prepare-native.sh',
-    '../../patches/saorsa-transport/0001-stream-forwarding-policy.patch',
-    '../../patches/saorsa-transport/0002-bounded-stream-socket.patch',
     '../../patches/saorsa-transport/0003-client-relay-response-bound.patch',
     '../../patches/saorsa-transport/0004-cancellable-peer-attempt.patch',
     '../../patches/saorsa-transport/0005-peer-handshake-hook.patch',

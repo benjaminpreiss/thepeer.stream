@@ -75,8 +75,6 @@ val verifyNativeProbe by tasks.registering {
             "app/src/main/java/dev/webp2p/controllerprobe/ViewerService.java",
             "app/src/main/java/dev/webp2p/controllerprobe/ConnectionHandoff.java",
             "../../patches/saorsa-transport/prepare-native.sh",
-            "../../patches/saorsa-transport/0001-stream-forwarding-policy.patch",
-            "../../patches/saorsa-transport/0002-bounded-stream-socket.patch",
             "../../patches/saorsa-transport/0003-client-relay-response-bound.patch",
             "../../patches/saorsa-transport/0004-cancellable-peer-attempt.patch",
             "../../patches/saorsa-transport/0005-peer-handshake-hook.patch") +

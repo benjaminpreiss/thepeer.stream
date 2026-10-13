@@ -53,7 +53,7 @@ findings. Historic test counts in those records are not current suite counts.
 The applied file is
 [0005-peer-handshake-hook.patch](../../patches/saorsa-transport/0005-peer-handshake-hook.patch),
 SHA-256 `5f4f7e02a92fd01e5bcb721958b633574e1d8da8eeeacd6475803886cd19e386`.
-It applies after 0001–0004 on revision
+It applies after 0003–0004 on revision
 `e2f08388088313c82cac393afa6ca27b9ce00516`. The superseded coordination-policy
 prototype and its research are removed; they are not required build inputs.
 
