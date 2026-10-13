@@ -1,0 +1,17 @@
+[package]
+name = "thepeer-cli"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "thepeer"
+path = "src/main.rs"
+
+[dependencies]
+tunnel-core = { path = "../tunnel-core", features = ["host"] }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util.workspace = true
+zeroize.workspace = true
+qrcode = { version = "=0.14.1", default-features = false }
+ratatui = { version = "=0.30.2", default-features = false, features = ["crossterm"] }

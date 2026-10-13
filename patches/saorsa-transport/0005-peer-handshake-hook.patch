@@ -1,0 +1,443 @@
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -291,6 +291,8 @@
+ /// connection management, and secure communication.
+ #[cfg(feature = "native")]
+ pub mod p2p_endpoint;
++#[cfg(feature = "native")]
++pub mod peer_handshake;
+ 
+ /// P2P configuration system
+ ///
+--- a/src/nat_traversal_api.rs
++++ b/src/nat_traversal_api.rs
+@@ -1085,6 +1085,7 @@
+ 
+ /// High-level NAT traversal endpoint for Autonomi P2P networks
+ pub struct NatTraversalEndpoint {
++    peer_handshake_hooks: Arc<crate::peer_handshake::HandshakeHooks>,
+     /// Underlying QUIC endpoint
+     inner_endpoint: Option<InnerEndpoint>,
+     /// Fallback internal endpoint for non-production builds
+@@ -2523,6 +2524,7 @@
+             constrained_event_tx: constrained_event_tx.clone(),
+             constrained_event_rx: TokioMutex::new(constrained_event_rx),
+             hole_punch_rx: TokioMutex::new(hole_punch_rx),
++            peer_handshake_hooks: Arc::new(crate::peer_handshake::HandshakeHooks::default()),
+             handshake_tx: hs_tx,
+             handshake_rx: TokioMutex::new(hs_rx),
+             closed_at: dashmap::DashMap::new(),
+@@ -2776,6 +2778,23 @@
+         event_callback: Option<Box<dyn Fn(NatTraversalEvent) + Send + Sync>>,
+         token_store: Option<Arc<dyn crate::TokenStore>>,
+         quinn_socket: Option<std::net::UdpSocket>,
++    ) -> Result<Self, NatTraversalError> {
++        Self::new_with_socket_and_hooks(
++            config,
++            event_callback,
++            token_store,
++            quinn_socket,
++            Arc::new(crate::peer_handshake::HandshakeHooks::default()),
++        )
++        .await
++    }
++
++    pub(crate) async fn new_with_socket_and_hooks(
++        config: NatTraversalConfig,
++        event_callback: Option<Box<dyn Fn(NatTraversalEvent) + Send + Sync>>,
++        token_store: Option<Arc<dyn crate::TokenStore>>,
++        quinn_socket: Option<std::net::UdpSocket>,
++        peer_handshake_hooks: Arc<crate::peer_handshake::HandshakeHooks>,
+     ) -> Result<Self, NatTraversalError> {
+         // Wrap the callback in Arc so it can be shared with background tasks
+         let event_callback: Option<Arc<dyn Fn(NatTraversalEvent) + Send + Sync>> =
+@@ -2961,6 +2980,7 @@
+             constrained_event_tx: constrained_event_tx.clone(),
+             constrained_event_rx: TokioMutex::new(constrained_event_rx),
+             hole_punch_rx: TokioMutex::new(hole_punch_rx),
++            peer_handshake_hooks,
+             handshake_tx: hs_tx,
+             handshake_rx: TokioMutex::new(hs_rx),
+             closed_at: dashmap::DashMap::new(),
+@@ -3175,6 +3195,23 @@
+         }
+ 
+         Ok(endpoint)
++    }
++
++    pub(crate) fn install_peer_handshake_handler(
++        &self,
++        handler: Arc<dyn crate::peer_handshake::PeerHandshakeHandler>,
++    ) -> Result<
++        crate::peer_handshake::HandshakeRegistration,
++        crate::peer_handshake::HandlerInstallError,
++    > {
++        self.peer_handshake_hooks.install(handler)
++    }
++
++    pub(crate) fn remove_peer_handshake_handler(
++        &self,
++        registration: &crate::peer_handshake::HandshakeRegistration,
++    ) -> bool {
++        self.peer_handshake_hooks.remove(registration)
+     }
+ 
+     /// Get the underlying QUIC endpoint
+@@ -5459,6 +5496,7 @@
+     }
+ 
+     fn spawn_accept_loop(&self) {
++        let peer_handshake_hooks = self.peer_handshake_hooks.clone();
+         let endpoint = match self.inner_endpoint.clone() {
+             Some(ep) => ep,
+             None => return,
+@@ -5507,6 +5545,22 @@
+                         }
+                         continue;
+                     }
++                };
++
++                // Snapshot before checking shutdown, so clearing the registry
++                // cannot reopen the default path during endpoint teardown.
++                let handler = peer_handshake_hooks.current();
++                if shutdown.load(Ordering::Relaxed) || peer_handshake_hooks.is_stopped() {
++                    connecting.refuse();
++                    return;
++                }
++                // Callbacks run without registry locks.
++                let connecting = match handler {
++                    Some(handler) => match handler.incoming(connecting) {
++                        Some(incoming) => incoming,
++                        None => continue,
++                    },
++                    None => connecting,
+                 };
+ 
+                 // Spawn handshake in background so we immediately loop back
+@@ -6332,6 +6386,7 @@
+         endpoint: Arc<InnerEndpoint>,
+         relay_public_addr: SocketAddr,
+     ) {
++        let peer_handshake_hooks = self.peer_handshake_hooks.clone();
+         let tx = self.handshake_tx.clone();
+         let connections = self.connections.clone();
+         let connection_endpoints = self.connection_endpoints.clone();
+@@ -6360,6 +6415,21 @@
+                         );
+                         return;
+                     }
++                };
++
++                // A separate opt-in preserves ordinary-only handler semantics.
++                // Snapshot before the shutdown check; callbacks run without locks.
++                let handler = peer_handshake_hooks.current();
++                if shutdown.load(Ordering::Relaxed) || peer_handshake_hooks.is_stopped() {
++                    connecting.refuse();
++                    return;
++                }
++                let connecting = match handler {
++                    Some(handler) => match handler.incoming_virtual(connecting) {
++                        Some(incoming) => incoming,
++                        None => continue,
++                    },
++                    None => connecting,
+                 };
+ 
+                 let tx2 = tx.clone();
+@@ -6850,9 +6920,11 @@
+ 
+     /// Shutdown the endpoint
+     pub async fn shutdown(&self) -> Result<(), NatTraversalError> {
+-        // Set shutdown flag and wake any task parked in accept_connection()
+-        // or transport listener loops
++        // Set shutdown before clearing hooks: an accept loop observing an empty
++        // stopped registry must refuse rather than start a default handshake.
+         self.shutdown.store(true, Ordering::Relaxed);
++        self.peer_handshake_hooks.shutdown();
++        // Wake any task parked in accept_connection() or transport listener loops
+         self.incoming_notify.notify_waiters();
+         self.shutdown_notify.notify_waiters();
+ 
+@@ -7112,6 +7184,20 @@
+ 
+             // Use "localhost" as server name - actual authentication is via PQC raw public keys
+             let server_name = "localhost".to_string();
++            let handler = self.peer_handshake_hooks.current();
++            if self.peer_handshake_hooks.is_stopped() {
++                return Ok(());
++            }
++            let owned_dial = match handler {
++                Some(handler) => match handler.outgoing(crate::peer_handshake::PeerDial::new(
++                    endpoint.clone(),
++                    candidate.address,
++                )) {
++                    Some(dial) => Some(dial),
++                    None => return Ok(()),
++                },
++                None => None,
++            };
+ 
+             debug!(
+                 "Attempting QUIC connection to candidate {} for {}",
+@@ -7119,7 +7205,11 @@
+             );
+ 
+             // Use the sync connect method from QUIC endpoint
+-            match endpoint.connect(candidate.address, &server_name) {
++            let connecting = match owned_dial {
++                Some(dial) => dial.connect(),
++                None => endpoint.connect(candidate.address, &server_name),
++            };
++            match connecting {
+                 Ok(connecting) => {
+                     info!(
+                         "Connection attempt initiated to {} for {}",
+--- a/src/p2p_endpoint.rs
++++ b/src/p2p_endpoint.rs
+@@ -1310,6 +1310,36 @@
+ impl P2pEndpoint {
+     /// Create a new P2P endpoint with the given configuration
+     pub async fn new(config: P2pConfig) -> Result<Self, EndpointError> {
++        Self::new_with_hooks(
++            config,
++            Arc::new(crate::peer_handshake::HandshakeHooks::default()),
++        )
++        .await
++    }
++
++    /// Construct with a handler installed before the ordinary accept loop starts.
++    /// Callbacks may run before construction returns.
++    /// Defaults, crypto and virtual opt-in semantics are unchanged. The returned
++    /// registration supports normal identity-safe removal. Once polled, failure
++    /// or cancellation detaches the handler; transferred work remains caller-owned.
++    pub async fn new_with_handshake_handler(
++        config: P2pConfig,
++        handler: Arc<dyn crate::peer_handshake::PeerHandshakeHandler>,
++    ) -> Result<(Self, crate::peer_handshake::HandshakeRegistration), EndpointError> {
++        let hooks = Arc::new(crate::peer_handshake::HandshakeHooks::default());
++        let registration = hooks
++            .install(handler)
++            .map_err(|_| EndpointError::Config("initial handshake handler unavailable".into()))?;
++        let mut guard = crate::peer_handshake::ConstructionHooks(Some(hooks.clone()));
++        let endpoint = Self::new_with_hooks(config, hooks).await?;
++        guard.0.take();
++        Ok((endpoint, registration))
++    }
++
++    async fn new_with_hooks(
++        config: P2pConfig,
++        hooks: Arc<crate::peer_handshake::HandshakeHooks>,
++    ) -> Result<Self, EndpointError> {
+         // Use provided keypair or generate a new one (ML-DSA-65)
+         let (public_key, secret_key) = match config.keypair.clone() {
+             Some(keypair) => keypair,
+@@ -1452,11 +1482,12 @@
+         nat_config.bind_addr = Some(actual_bind_addr);
+ 
+         // Create NAT traversal endpoint with the shared socket
+-        let inner = NatTraversalEndpoint::new_with_socket(
++        let inner = NatTraversalEndpoint::new_with_socket_and_hooks(
+             nat_config,
+             Some(event_callback),
+             None,
+             Some(quinn_socket),
++            hooks,
+         )
+         .await
+         .map_err(|e| EndpointError::Config(e.to_string()))?;
+@@ -1589,6 +1620,54 @@
+     }
+ 
+     // === Connection Management ===
++
++    /// Install optional handshake ownership hooks. Without a handler, dispatch
++    /// is unchanged. Established connections are never retroactively adopted.
++    /// Virtual ingress is unaffected unless `incoming_virtual` is overridden.
++    /// Removal permits later installation.
++    pub fn install_peer_handshake_handler(
++        &self,
++        handler: Arc<dyn crate::peer_handshake::PeerHandshakeHandler>,
++    ) -> Result<
++        crate::peer_handshake::HandshakeRegistration,
++        crate::peer_handshake::HandlerInstallError,
++    > {
++        if self.shutdown.is_cancelled() {
++            return Err(crate::peer_handshake::HandlerInstallError::Stopped);
++        }
++        self.inner.install_peer_handshake_handler(handler)
++    }
++
++    /// Remove this installation, restoring normal dispatch for future callbacks.
++    /// A stale registration cannot remove a newer installation. In-flight callbacks
++    /// and transferred connections remain the handler/caller's responsibility.
++    pub fn remove_peer_handshake_handler(
++        &self,
++        registration: &crate::peer_handshake::HandshakeRegistration,
++    ) -> bool {
++        self.inner.remove_peer_handshake_handler(registration)
++    }
++
++    /// Send upstream coordination on an already established coordinator link.
++    /// No dial, fallback, identity registration or connection-table polling occurs.
++    pub async fn request_coordinated_peer(
++        &self,
++        target: SocketAddr,
++        coordinator: SocketAddr,
++    ) -> Result<(), EndpointError> {
++        if self.shutdown.is_cancelled() {
++            return Err(EndpointError::ShuttingDown);
++        }
++        let coordinator = normalize_socket_addr(coordinator);
++        if !self.is_connected_to_addr(coordinator).await {
++            return Err(EndpointError::Config(
++                "coordinator must already be connected".into(),
++            ));
++        }
++        self.inner
++            .initiate_nat_traversal_for_peer(normalize_socket_addr(target), coordinator, None)
++            .map_err(EndpointError::NatTraversal)
++    }
+ 
+     /// Start an unregistered QUIC attempt with this endpoint's existing crypto
+     /// configuration. The caller owns the attempt, awaits full TLS completion,
+--- /dev/null
++++ b/src/peer_handshake.rs
+@@ -0,0 +1,138 @@
++//! Optional handshake ownership hooks. Virtual ingress is opt-in. No attempt policy.
++use crate::high_level::{Connecting, Endpoint, Incoming};
++use parking_lot::Mutex;
++use std::{net::SocketAddr, sync::Arc};
++
++/// A coordinator-triggered dial using the endpoint's existing client crypto.
++/// Consuming this value starts the normal dial; dropping it skips that dial.
++/// Addresses are routing hints, not authenticated identities.
++pub struct PeerDial {
++    endpoint: Endpoint,
++    address: SocketAddr,
++}
++impl PeerDial {
++    pub(crate) fn new(endpoint: Endpoint, address: SocketAddr) -> Self {
++        Self { endpoint, address }
++    }
++    /// The requested routing address.
++    pub fn remote_address(&self) -> SocketAddr {
++        self.address
++    }
++    /// Start with the existing crypto configuration and retain the actual attempt.
++    pub fn connect(self) -> Result<Connecting, crate::ConnectError> {
++        self.endpoint.connect(self.address, "localhost")
++    }
++}
++
++/// Optional application ownership, not a one-shot receiver or fallback policy.
++/// Return the ORIGINAL value for normal Saorsa handling, or None after consuming
++/// it (including dropping/refusing it). Owned attempts require full TLS completion.
++/// Handlers must be synchronous, non-blocking, non-panicking and thread-safe.
++/// Calls already selected before removal can still run afterward; handlers own
++/// synchronization/cancellation of their queues and transferred work.
++pub trait PeerHandshakeHandler: Send + Sync {
++    /// Handle ordinary-UDP incoming before Saorsa starts its TLS handshake.
++    fn incoming(&self, incoming: Incoming) -> Option<Incoming> {
++        Some(incoming)
++    }
++    /// Opt into virtual-socket incoming ownership before TLS starts. The default
++    /// returns the original incoming to Saorsa, and never calls `incoming`.
++    /// This keeps ordinary-only handlers (such as coordination) isolated.
++    fn incoming_virtual(&self, incoming: Incoming) -> Option<Incoming> {
++        Some(incoming)
++    }
++    /// Handle a coordination dial before it starts; default uses the normal path.
++    fn outgoing(&self, dial: PeerDial) -> Option<PeerDial> {
++        Some(dial)
++    }
++    /// Called once on removal, shutdown, or failed/cancelled opted-in construction
++    /// after installation, outside registry locks.
++    /// Already selected callbacks and already transferred connections remain the
++    /// handler/caller's responsibility. No implicit close or timeout is imposed.
++    fn detached(&self) {}
++}
++
++/// Identity of one installation. Dropping/cloning it does not remove the hook.
++/// Removal compares installation identities, not handler pointers: an old token
++/// cannot remove a later installation of the same handler object.
++#[derive(Clone, Debug)]
++pub struct HandshakeRegistration(Arc<()>);
++
++/// Installation failure; neither case replaces an existing handler.
++#[derive(Debug)]
++pub enum HandlerInstallError {
++    /// Remove the existing installation explicitly before installing another.
++    Occupied,
++    /// The endpoint has shut down.
++    Stopped,
++}
++#[derive(Default)]
++struct State {
++    stopped: bool,
++    installed: Option<(HandshakeRegistration, Arc<dyn PeerHandshakeHandler>)>,
++}
++#[derive(Default)]
++pub(crate) struct HandshakeHooks(Mutex<State>);
++
++// Closing a failed/cancelled construction must not restore default acceptance.
++// Successful construction disarms this guard and transfers shutdown to the endpoint.
++pub(crate) struct ConstructionHooks(pub(crate) Option<Arc<HandshakeHooks>>);
++impl Drop for ConstructionHooks {
++    fn drop(&mut self) {
++        if let Some(hooks) = self.0.take() {
++            hooks.shutdown();
++        }
++    }
++}
++impl HandshakeHooks {
++    pub(crate) fn is_stopped(&self) -> bool {
++        self.0.lock().stopped
++    }
++    pub(crate) fn install(
++        &self,
++        handler: Arc<dyn PeerHandshakeHandler>,
++    ) -> Result<HandshakeRegistration, HandlerInstallError> {
++        let mut state = self.0.lock();
++        if state.stopped {
++            return Err(HandlerInstallError::Stopped);
++        }
++        if state.installed.is_some() {
++            return Err(HandlerInstallError::Occupied);
++        }
++        let key = HandshakeRegistration(Arc::new(()));
++        state.installed = Some((key.clone(), handler));
++        Ok(key)
++    }
++    pub(crate) fn remove(&self, key: &HandshakeRegistration) -> bool {
++        let old = {
++            let mut state = self.0.lock();
++            match &state.installed {
++                Some((active, _)) if Arc::ptr_eq(&active.0, &key.0) => state.installed.take(),
++                _ => None,
++            }
++        };
++        if let Some((_, handler)) = old {
++            handler.detached();
++            true
++        } else {
++            false
++        }
++    }
++    pub(crate) fn current(&self) -> Option<Arc<dyn PeerHandshakeHandler>> {
++        self.0
++            .lock()
++            .installed
++            .as_ref()
++            .map(|(_, handler)| handler.clone())
++    }
++    pub(crate) fn shutdown(&self) {
++        let old = {
++            let mut state = self.0.lock();
++            state.stopped = true;
++            state.installed.take()
++        };
++        if let Some((_, handler)) = old {
++            handler.detached();
++        }
++    }
++}

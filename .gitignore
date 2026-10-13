@@ -1,0 +1,28 @@
+# Local credentials and wallet material (never commit these).
+.env
+.env.*
+!.env.example
+id.json
+wallet.json
+*keypair*.json
+*.key
+*.pem
+*.p12
+*.pfx
+*.keystore
+invitation.json
+
+# Retired publisher: preserve local wallets/reports without ever committing them.
+/deployment/irys/
+
+# Local build output, dependency caches, logs and editor state.
+node_modules/
+target/
+/release/
+dist/
+__pycache__/
+*.pyc
+*.log
+.DS_Store
+.idea/
+.vscode/

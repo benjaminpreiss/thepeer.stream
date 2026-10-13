@@ -1,0 +1,9 @@
+.gradle/
+.gradle-home/
+.local-test/
+generated/
+build/
+**/build/
+local.properties
+*.apk
+*.aab

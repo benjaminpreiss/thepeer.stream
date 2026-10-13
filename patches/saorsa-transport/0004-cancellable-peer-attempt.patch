@@ -1,0 +1,71 @@
+--- a/src/high_level/connection.rs
++++ b/src/high_level/connection.rs
+@@ -227,6 +227,28 @@
+                 ))
+             }))
+         }
++    }
++
++    /// Cancel this attempt and atomically report whether a QUIC peer response
++    /// arrived before cancellation. This is NOT proof of TLS peer identity.
++    ///
++    /// An already recorded error is returned instead of classifying the attempt
++    /// as silent. The state lock covers both inspection and close, preventing a
++    /// deadline race from treating a concurrent response/error as mere silence.
++    /// This closes only this connection, never its shared endpoint.
++    pub fn abort(self) -> Result<bool, ConnectionError> {
++        let conn = self.conn.as_ref().ok_or(ConnectionError::LocallyClosed)?;
++        let mut state = conn.state.lock("abort_connecting");
++        let outcome = match state.error.clone() {
++            Some(error) => Err(error),
++            None => Ok(state.peer_response_received),
++        };
++        state.close(
++            VarInt::from_u32(0),
++            Bytes::from_static(b"connection attempt cancelled"),
++            &conn.shared,
++        );
++        outcome
+     }
+ 
+     fn has_peer_response(&self) -> Result<bool, ConnectionError> {
+--- a/src/p2p_endpoint.rs
++++ b/src/p2p_endpoint.rs
+@@ -1589,6 +1589,28 @@
+     }
+ 
+     // === Connection Management ===
++
++    /// Start an unregistered QUIC attempt with this endpoint's existing crypto
++    /// configuration. The caller owns the attempt, awaits full TLS completion,
++    /// and retains the returned connection. No fallback or P2P stream reader is
++    /// started, and no connection-table relookup is required.
++    ///
++    /// Intended for application-owned bidirectional streams, not a replacement
++    /// for `connect` when P2P control/reader registration is required. The caller
++    /// must retain this endpoint and shut it down separately.
++    pub fn begin_connect(
++        &self,
++        addr: SocketAddr,
++    ) -> Result<crate::high_level::Connecting, EndpointError> {
++        if self.shutdown.is_cancelled() {
++            return Err(EndpointError::ShuttingDown);
++        }
++        self.inner
++            .get_endpoint()
++            .ok_or_else(|| EndpointError::Config("QUIC endpoint not available".to_string()))?
++            .connect(normalize_socket_addr(addr), "peer")
++            .map_err(|error| EndpointError::Connection(error.to_string()))
++    }
+ 
+     /// Connect to a peer by address (direct connection).
+     ///
+@@ -2901,7 +2923,7 @@
+     /// The link-transport adapter needs the exact accepted handle. Looking it
+     /// up again by address races connection cleanup when a short-lived peer
+     /// closes immediately after the handshake.
+-    pub(crate) async fn accept_with_connection(
++    pub async fn accept_with_connection(
+         &self,
+     ) -> Option<(PeerConnection, crate::high_level::Connection)> {
+         if self.shutdown.is_cancelled() {

@@ -1,0 +1,19 @@
+--- a/src/nat_traversal_api.rs
++++ b/src/nat_traversal_api.rs
+@@ -4858,6 +4858,16 @@
+                     ))
+                 })?;
+             let resp_len = u32::from_be_bytes(resp_len_buf) as usize;
++            // Bound untrusted control input BEFORE allocation. Successful replies
++            // are small; allow bounded diagnostic text without accepting arbitrary
++            // relay-controlled allocations. The enclosing 10 s deadline also
++            // covers partial prefixes and partial bodies.
++            const MAX_CONNECT_UDP_RESPONSE: usize = 4096;
++            if resp_len == 0 || resp_len > MAX_CONNECT_UDP_RESPONSE {
++                return Err(NatTraversalError::ProtocolError(
++                    "Invalid relay response size".to_string(),
++                ));
++            }
+             let mut response_bytes = vec![0u8; resp_len];
+             recv_stream
+                 .read_exact(&mut response_bytes)

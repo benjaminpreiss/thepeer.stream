@@ -1,0 +1,17 @@
+[package]
+name = "tunnel-android"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[lib]
+# Keep the installed Java library/JNI names stable; no legacy runtime is retained.
+name = "controller_saorsa_probe"
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+tunnel-core = { path = "../tunnel-core" }
+tokio.workspace = true
+tokio-util.workspace = true
+zeroize.workspace = true
+jni = "=0.22.4"

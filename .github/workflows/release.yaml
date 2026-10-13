@@ -1,0 +1,220 @@
+name: Draft release
+
+on:
+  workflow_dispatch:
+    inputs:
+      android_version_code:
+        description: 'Android version code (integer greater than every previously published code)'
+        type: number
+        required: true
+        default: 7
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  THEPEER_RUST_TOOLCHAIN: '1.95.0'
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  validate:
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+      version_code: ${{ steps.version.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - id: version
+        name: Require a version tag and explicit Android version code
+        env:
+          VERSION_CODE: ${{ inputs.android_version_code }}
+        run: |
+          [[ "$GITHUB_REF_TYPE" == tag ]] || { echo 'Run this workflow on a pushed version tag, not a branch.' >&2; exit 1; }
+          [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9][A-Za-z0-9.-]*)?$ ]] || exit 1
+          [[ "$VERSION_CODE" =~ ^[1-9][0-9]{0,9}$ ]] && (( VERSION_CODE <= 2100000000 )) || exit 1
+          echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+
+  checks:
+    needs: validate
+    uses: ./.github/workflows/checks.yaml
+
+  helper:
+    needs: [validate, checks]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            platform: macos-arm64
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            platform: macos-x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      TARGET: ${{ matrix.target }}
+      PLATFORM: ${{ matrix.platform }}
+      TAG: ${{ needs.validate.outputs.tag }}
+      COMMIT: ${{ needs.validate.outputs.commit }}
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - name: Install native build prerequisites
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential clang cmake pkg-config perl
+          else
+            command -v cmake >/dev/null || brew install cmake
+          fi
+          rustup toolchain install "$THEPEER_RUST_TOOLCHAIN" --profile minimal --target "$TARGET"
+          cargo +"$THEPEER_RUST_TOOLCHAIN" fetch --locked
+      - name: Build and package helper
+        run: |
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target/build"
+          export RUSTFLAGS="--remap-path-prefix=$HOME=/build/home --remap-path-prefix=$GITHUB_WORKSPACE=/src"
+          export CFLAGS="-ffile-prefix-map=$HOME=/build/home -ffile-prefix-map=$GITHUB_WORKSPACE=/src"
+          export CXXFLAGS="$CFLAGS"
+          native=$(bash scripts/native-workspace.sh)
+          cargo +"$THEPEER_RUST_TOOLCHAIN" build --release --locked --offline --manifest-path "$native/Cargo.toml" --target "$TARGET" -p thepeer-cli
+          "$CARGO_TARGET_DIR/$TARGET/release/thepeer" --help | grep '^Usage: thepeer '
+          cargo +"$THEPEER_RUST_TOOLCHAIN" metadata --locked --offline --format-version 1 --filter-platform "$TARGET" > "$RUNNER_TEMP/metadata.json"
+          python3 scripts/release-bundle.py --kind helper --platform "$PLATFORM" --tag "$TAG" --commit "$COMMIT" \
+            --metadata "$RUNNER_TEMP/metadata.json" --binary "$CARGO_TARGET_DIR/$TARGET/release/thepeer"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: release/*.tar.gz
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    needs: [validate, checks]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    environment: release
+    env:
+      TAG: ${{ needs.validate.outputs.tag }}
+      COMMIT: ${{ needs.validate.outputs.commit }}
+      THEPEER_ANDROID_VERSION_CODE: ${{ needs.validate.outputs.version_code }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install Android and Rust build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential clang cmake pkg-config perl
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "THEPEER_ANDROID_VERSION_NAME=${TAG#v}" >> "$GITHUB_ENV"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install 'platforms;android-35' 'build-tools;35.0.0' 'ndk;27.2.12479018'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          rustup toolchain install "$THEPEER_RUST_TOOLCHAIN" --profile minimal --target aarch64-linux-android
+          cargo +"$THEPEER_RUST_TOOLCHAIN" fetch --locked
+      - name: Build and verify native transport, then assemble unsigned APK
+        run: |
+          bash apps/android-controller/native-build.sh
+          bash apps/android-controller/gradlew -p apps/android-controller --no-daemon :app:assembleRelease :app:collectReleaseDependencies
+          cargo +"$THEPEER_RUST_TOOLCHAIN" metadata --locked --offline --format-version 1 --filter-platform aarch64-linux-android > "$RUNNER_TEMP/metadata.json"
+      - name: Sign, verify and package APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          umask 077
+          : "${ANDROID_KEYSTORE_BASE64:?Missing signing keystore}" "${ANDROID_KEYSTORE_PASSWORD:?Missing keystore password}"
+          : "${ANDROID_KEY_ALIAS:?Missing key alias}" "${ANDROID_KEY_PASSWORD:?Missing key password}"
+          signing=$(mktemp -d "$RUNNER_TEMP/signing.XXXXXX")
+          export SIGNING_DIR="$signing"
+          trap 'rm -rf "$signing"' EXIT
+          python3 - <<'PY'
+          import base64, os
+          from pathlib import Path
+          Path(os.environ['SIGNING_DIR'], 'release.p12').write_bytes(base64.b64decode(os.environ['ANDROID_KEYSTORE_BASE64'], validate=True))
+          PY
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$tools/zipalign" -P 16 -f 4 apps/android-controller/app/build/outputs/apk/release/app-release-unsigned.apk "$signing/aligned.apk"
+          "$tools/apksigner" sign --ks "$signing/release.p12" --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass env:ANDROID_KEYSTORE_PASSWORD --key-pass env:ANDROID_KEY_PASSWORD \
+            --out "$signing/signed.apk" "$signing/aligned.apk"
+          "$tools/apksigner" verify --verbose --print-certs "$signing/signed.apk"
+          "$tools/zipalign" -c -P 16 4 "$signing/signed.apk"
+          python3 scripts/release-bundle.py --kind android --platform android-arm64 --tag "$TAG" --commit "$COMMIT" \
+            --metadata "$RUNNER_TEMP/metadata.json" --binary "$signing/signed.apk" \
+            --android-dependencies apps/android-controller/app/build/release-dependencies
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-android-arm64
+          path: release/*
+          if-no-files-found: error
+          retention-days: 7
+
+  draft:
+    needs: [validate, helper, android]
+    runs-on: ubuntu-22.04
+    environment: release
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.validate.outputs.tag }}
+      COMMIT: ${{ needs.validate.outputs.commit }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: release
+      - name: Check asset set, checksum and create draft only
+        run: |
+          [[ "$(gh api "repos/$GH_REPO/commits/$TAG" --jq .sha)" == "$COMMIT" ]] || { echo 'Release tag moved during build.' >&2; exit 1; }
+          cd release
+          expected=(
+            "thepeer.stream-$TAG-linux-x86_64.tar.gz"
+            "thepeer.stream-$TAG-macos-arm64.tar.gz"
+            "thepeer.stream-$TAG-macos-x86_64.tar.gz"
+            "thepeer.stream-$TAG-android-arm64.apk"
+            "thepeer.stream-$TAG-android-arm64-licenses.tar.gz"
+          )
+          [[ "$(find . -maxdepth 1 -type f | wc -l)" -eq "${#expected[@]}" ]]
+          for asset in "${expected[@]}"; do test -s "$asset"; done
+          sha256sum "${expected[@]}" > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          Source commit: $COMMIT
+
+          Draft for review — do not publish until physical Direct/Relay/Stop checks and dependency notice review pass.
+          Helpers: Linux x86_64 (glibc 2.35+), macOS 15+ arm64 and x86_64. macOS binaries are not notarized.
+          Android: signed arm64 APK, Android 8.0/API 26 or newer. Keep the signing key for future updates.
+          License texts and dependency reports are in the helper archives and Android license archive.
+          SHA256SUMS covers every asset; checksums detect corruption, not a compromised publisher.
+          EOF
+          flags=()
+          [[ "$TAG" != *-* ]] || flags+=(--prerelease)
+          gh release create "$TAG" "${expected[@]}" SHA256SUMS --verify-tag --draft "${flags[@]}" \
+            --title "thepeer.stream $TAG" --notes-file "$RUNNER_TEMP/release-notes.md"

@@ -1,0 +1,340 @@
+--- a/src/masque/relay_server.rs
++++ b/src/masque/relay_server.rs
+@@ -668,6 +668,8 @@
+     /// When set, the server refuses inbound clients whose source IP matches
+     /// one of our current upstream relays (see [`IpPolicy`]).
+     ip_policy: Option<Arc<IpPolicy>>,
++    /// Explicit internal loopback family; never request gateway port mappings.
++    local_allocation_ip: Option<IpAddr>,
+ }
+ 
+ impl std::fmt::Debug for MasqueRelayServer {
+@@ -680,12 +682,91 @@
+     }
+ }
+ 
++/// A decision point in the stream forwarding path. Packet contents and credentials
++/// are deliberately not exposed to the policy.
++#[derive(Clone, Copy, Debug)]
++pub enum StreamForwardEvent {
++    /// Reserve frame work/bytes BEFORE allocating its buffer. Includes the four
++    /// prefix bytes; a keepalive therefore costs four bytes, not zero.
++    Frame {
++        /// Declared frame size including its four-byte prefix.
++        wire_bytes: usize,
++    },
++    /// Immediately before sending a decoded datagram to its requested target.
++    Send {
++        /// Destination decoded from the client's untrusted frame.
++        target: SocketAddr,
++        /// UDP payload length, excluding relay framing.
++        payload_bytes: usize,
++    },
++    /// Before copying or queueing a datagram received from a UDP source.
++    Receive {
++        /// Source reported by the allocated UDP socket.
++        source: SocketAddr,
++        /// UDP payload length, excluding relay framing.
++        payload_bytes: usize,
++    },
++}
++
++/// Authorization is synchronous and non-blocking; optional pacing may suspend.
++/// All callbacks must be non-panicking. Implementations must bind
++/// relay-internal session IDs to trusted connection/pairing state, not source-IP
++/// identity. Unknown/revoked sessions must be denied. A false Frame/Send decision
++/// closes the forwarding session through normal cleanup; false Receive drops the
++/// packet (an unrelated UDP sender must not be able to close the session).
++pub trait StreamForwardPolicy: Send + Sync + 'static {
++    /// Atomically reserve any applicable budget and authorize this operation.
++    fn permit(&self, session_id: u64, event: StreamForwardEvent) -> bool;
++
++    /// Await ordinary bandwidth availability AFTER synchronous authorization.
++    /// Called only for Send/Receive, never Frame. Returning false ends the session;
++    /// temporary bandwidth exhaustion should wait, not return false. The future
++    /// must be cancellation-safe: closing the session drops/aborts the wait.
++    /// Callers must choose the accounting point so a relayed packet is not charged
++    /// twice, and share one bucket across both directions of a pairing. Revocation
++    /// must cancel the session or be observed by this future before allowing send.
++    fn pace(
++        &self,
++        _session_id: u64,
++        _event: StreamForwardEvent,
++    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = bool> + Send + '_>> {
++        Box::pin(async { true })
++    }
++}
++
++/// Explicit client-frame and UDP-to-stream queue bounds. The Receive policy must
++/// separately bound accepted UDP payload sizes (the socket buffer is 64 KiB).
++/// These do not limit handshakes, allocations, total sessions, or other paths.
++#[derive(Clone, Copy, Debug)]
++pub struct StreamForwardLimits {
++    max_frame_bytes: usize,
++    queue_packets: usize,
++}
++impl StreamForwardLimits {
++    /// Maximum client frame body bytes and UDP-to-stream queue entries. Reject
++    /// invalid/excessive settings rather than silently selecting defaults.
++    pub fn new(max_frame_bytes: usize, queue_packets: usize) -> Option<Self> {
++        if max_frame_bytes == 0
++            || max_frame_bytes > 512 * 1024
++            || queue_packets == 0
++            || queue_packets > RELAY_FORWARD_CHANNEL_CAPACITY
++        {
++            return None;
++        }
++        Some(Self {
++            max_frame_bytes,
++            queue_packets,
++        })
++    }
++}
++
+ impl MasqueRelayServer {
+     /// Create a new MASQUE relay server with a single IP version
+     pub fn new(config: MasqueRelayConfig, public_address: SocketAddr) -> Self {
+         Self {
+             config,
+             public_address: ParkingRwLock::new(public_address),
++            local_allocation_ip: None,
+             secondary_address: None,
+             relay_serving_enabled: AtomicBool::new(true),
+             sessions: RwLock::new(HashMap::new()),
+@@ -709,6 +790,19 @@
+                 .collect(),
+             ip_policy: None,
+         }
++    }
++
++    /// Create a loopback-only allocator with UPnP disabled. Accepts an explicit
++    /// IPv4 or IPv6 loopback address; other addresses are rejected. The internal
++    /// UDP family is independent of the carrier family. This does not install a
++    /// forwarding policy or create a public listener.
++    pub fn new_local(config: MasqueRelayConfig, loopback: IpAddr) -> Option<Self> {
++        if !loopback.is_loopback() {
++            return None;
++        }
++        let mut server = Self::new(config, SocketAddr::new(loopback, 0));
++        server.local_allocation_ip = Some(loopback);
++        Some(server)
+     }
+ 
+     /// Install a shared [`IpPolicy`]. Should be the same handle passed to the
+@@ -759,6 +853,7 @@
+         Self {
+             config,
+             public_address: ParkingRwLock::new(primary),
++            local_allocation_ip: None,
+             secondary_address: Some(secondary),
+             relay_serving_enabled: AtomicBool::new(true),
+             sessions: RwLock::new(HashMap::new()),
+@@ -1055,7 +1150,9 @@
+         // Determine the public IP to advertise based on client IP version.
+         // Snapshot the public_address once under the lock for consistency.
+         let primary = *self.public_address.read();
+-        let public_ip = if client_addr.is_ipv4() {
++        let public_ip = if let Some(ip) = self.local_allocation_ip {
++            ip
++        } else if client_addr.is_ipv4() {
+             if primary.is_ipv4() {
+                 primary.ip()
+             } else {
+@@ -1103,7 +1200,9 @@
+                 (socket, port, upnp)
+             }
+             None => {
+-                let bind_addr: SocketAddr = if client_addr.is_ipv4() {
++                let bind_addr: SocketAddr = if let Some(ip) = self.local_allocation_ip {
++                    SocketAddr::new(ip, 0)
++                } else if client_addr.is_ipv4() {
+                     SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0)
+                 } else {
+                     SocketAddr::new(IpAddr::V6(Ipv6Addr::UNSPECIFIED), 0)
+@@ -1198,8 +1297,16 @@
+         // Best-effort UPnP: reuse the reservation's existing mapping on a
+         // reclaim, otherwise ask the local gateway (if any) to forward the
+         // freshly-bound relay port. The service tolerates missing gateways.
+-        let upnp_svc = reused_upnp
+-            .unwrap_or_else(|| UpnpMappingService::start(bound_port, UpnpConfig::default()));
++        let upnp_svc = reused_upnp.unwrap_or_else(|| {
++            UpnpMappingService::start(
++                bound_port,
++                if self.local_allocation_ip.is_some() {
++                    UpnpConfig::disabled()
++                } else {
++                    UpnpConfig::default()
++                },
++            )
++        });
+         self.upnp_mappings
+             .write()
+             .await
+@@ -1425,8 +1532,52 @@
+     pub async fn run_stream_forwarding_loop(
+         self: &Arc<Self>,
+         session_id: u64,
++        send_stream: crate::high_level::SendStream,
++        recv_stream: crate::high_level::RecvStream,
++    ) {
++        self.run_stream_forwarding_inner(
++            session_id,
++            send_stream,
++            recv_stream,
++            None,
++            StreamForwardLimits {
++                max_frame_bytes: 512 * 1024,
++                queue_packets: RELAY_FORWARD_CHANNEL_CAPACITY,
++            },
++        )
++        .await;
++    }
++
++    /// Forward using mandatory caller-supplied policy and explicit buffer limits.
++    /// This is an opt-in entry point, NOT a server-wide policy: callers must not
++    /// expose the unrestricted entry point or alternative forwarding paths.
++    /// Allocation admission and policy/session lifecycle ownership remain the
++    /// caller's responsibility. No authentication or crypto behavior is changed.
++    pub async fn run_stream_forwarding_with_policy(
++        self: &Arc<Self>,
++        session_id: u64,
++        send_stream: crate::high_level::SendStream,
++        recv_stream: crate::high_level::RecvStream,
++        policy: Arc<dyn StreamForwardPolicy>,
++        limits: StreamForwardLimits,
++    ) {
++        self.run_stream_forwarding_inner(
++            session_id,
++            send_stream,
++            recv_stream,
++            Some(policy),
++            limits,
++        )
++        .await;
++    }
++
++    async fn run_stream_forwarding_inner(
++        self: &Arc<Self>,
++        session_id: u64,
+         mut send_stream: crate::high_level::SendStream,
+         mut recv_stream: crate::high_level::RecvStream,
++        policy: Option<Arc<dyn StreamForwardPolicy>>,
++        limits: StreamForwardLimits,
+     ) {
+         // Claim this session's forwarding slot BEFORE touching the socket. The
+         // registration (a) lets a concurrent handover close_session cancel this
+@@ -1507,7 +1658,9 @@
+         // channel as fast as the kernel delivers packets.  The writer
+         // pulls from the channel and writes to the QUIC stream at
+         // whatever rate the stream's flow control allows.  The channel
+-        // acts as a userspace buffer (~10 MB at capacity) that absorbs
++        // acts as a userspace buffer. The legacy 8192-entry queue holds roughly
++        // 10 MB of typical QUIC packets, but much more for large UDP payloads.
++        // Policy callers explicitly choose its capacity. It absorbs
+         // full max-message-size bursts that would otherwise overflow the
+         // kernel's tiny 208 KB UDP receive buffer.
+         //
+@@ -1515,10 +1668,10 @@
+         // the same writer can interleave normal data frames (Direction
+         // 1's forwarded UDP) with out-of-band control frames emitted
+         // by Direction 2 when its egress send_to fails with EMSGSIZE.
+-        let (fwd_tx, mut fwd_rx) =
+-            tokio::sync::mpsc::channel::<WriterItem>(RELAY_FORWARD_CHANNEL_CAPACITY);
++        let (fwd_tx, mut fwd_rx) = tokio::sync::mpsc::channel::<WriterItem>(limits.queue_packets);
+         let ctrl_tx = fwd_tx.clone();
+ 
++        let receive_policy = policy.clone();
+         // Reader: UDP socket → channel (never blocked by stream writes)
+         let mut reader_handle = tokio::spawn(async move {
+             let mut buf = vec![0u8; 65536];
+@@ -1531,6 +1684,31 @@
+                         // the attribution of the same bytes.
+                         SOCKET_TRAFFIC.record_rx(len);
+                         stats.record_relay_target_rx(len as u64);
++                        if receive_policy.as_ref().is_some_and(|policy| {
++                            !policy.permit(
++                                session_id,
++                                StreamForwardEvent::Receive {
++                                    source,
++                                    payload_bytes: len,
++                                },
++                            )
++                        }) {
++                            continue;
++                        }
++                        if let Some(policy) = receive_policy.as_ref() {
++                            if !policy
++                                .pace(
++                                    session_id,
++                                    StreamForwardEvent::Receive {
++                                        source,
++                                        payload_bytes: len,
++                                    },
++                                )
++                                .await
++                            {
++                                return "policy_receive_pacing_cancelled";
++                            }
++                        }
+                         let payload = Bytes::copy_from_slice(&buf[..len]);
+                         let datagram =
+                             UncompressedDatagram::new(VarInt::from_u32(0), source, payload);
+@@ -1685,24 +1863,25 @@
+                     // prefix included, keepalives included.
+                     stats2.record_stream_rx(len_buf.len() as u64);
+ 
+-                    // Zero-length frame = keepalive ping, skip.
++                    // Check the configured cap before policy dispatch or buffer
++                    // allocation. The legacy path retains its 512 KiB ceiling.
++                    if frame_len > limits.max_frame_bytes {
++                        tracing::warn!(
++                            session_id,
++                            frame_len,
++                            "Relay frame exceeds configured limit, closing session"
++                        );
++                        return "corrupt_frame_length";
++                    }
++
++                    if policy.as_ref().is_some_and(|policy| !policy.permit(
++                        session_id, StreamForwardEvent::Frame { wire_bytes: frame_len + 4 })) {
++                        return "policy_frame_denied";
++                    }
++                    // Keepalive work must pass the frame policy as well.
+                     if frame_len == 0 {
+                         stats2.record_stream_rx_keepalive();
+                         continue;
+-                    }
+-
+-                    // Safety cap: reject obviously corrupt length prefixes that
+-                    // would allocate huge buffers.  Legitimate QUIC packets are
+-                    // ≤65535 bytes; anything above 512KB is certainly a framing
+-                    // error or corruption — close the session.
+-                    const MAX_RELAY_FRAME: usize = 512 * 1024;
+-                    if frame_len > MAX_RELAY_FRAME {
+-                        tracing::warn!(
+-                            session_id,
+-                            frame_len,
+-                            "Corrupt stream frame length, closing session"
+-                        );
+-                        return "corrupt_frame_length";
+                     }
+ 
+                     // Read frame data
+@@ -1721,6 +1900,17 @@
+                             stats2.record_datagram();
+                             let target = datagram.target;
+                             let payload_len = datagram.payload.len();
++                            if policy.as_ref().is_some_and(|policy| !policy.permit(
++                                session_id, StreamForwardEvent::Send { target, payload_bytes: payload_len })) {
++                                return "policy_send_denied";
++                            }
++                            if let Some(policy) = policy.as_ref() {
++                                if !policy.pace(session_id, StreamForwardEvent::Send {
++                                    target, payload_bytes: payload_len,
++                                }).await {
++                                    return "policy_send_pacing_cancelled";
++                                }
++                            }
+                             match socket2.send_to(&datagram.payload, target).await {
+                                 Ok(_) => {
+                                     // Confirmed forwarded to the third-party target.

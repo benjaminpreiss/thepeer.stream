@@ -1,0 +1,133 @@
+--- a/src/masque/relay_socket.rs
++++ b/src/masque/relay_socket.rs
+@@ -120,7 +120,7 @@
+ /// is true either way; [`shutdown_requested`](Self::shutdown_requested) only for
+ /// the second.
+ #[derive(Debug)]
+-pub(crate) struct RelayTunnelControl {
++pub struct RelayTunnelControl {
+     tasks: PlMutex<Vec<tokio::task::JoinHandle<()>>>,
+     state: Arc<TunnelState>,
+ }
+@@ -271,18 +271,18 @@
+     }
+ 
+     /// Returns whether the tunnel has failed or has been explicitly shut down.
+-    pub(crate) fn is_closed(&self) -> bool {
++    pub fn is_closed(&self) -> bool {
+         self.state.is_closed()
+     }
+ 
+     /// Returns whether this tunnel was dismantled by a local shutdown request
+     /// rather than by a transport failure.
+-    pub(crate) fn shutdown_requested(&self) -> bool {
++    pub fn shutdown_requested(&self) -> bool {
+         self.state.shutdown_requested()
+     }
+ 
+     /// Wait until the tunnel reader exits or shutdown is requested.
+-    pub(crate) async fn closed(&self) {
++    pub async fn closed(&self) {
+         loop {
+             if self.is_closed() {
+                 return;
+@@ -296,7 +296,7 @@
+     }
+ 
+     /// Stop the tunnel and wait for all task-owned QUIC streams to be dropped.
+-    pub(crate) async fn shutdown(&self) {
++    pub async fn shutdown(&self) {
+         let handles = self.abort_tasks();
+         for handle in handles {
+             let _ = handle.await;
+@@ -308,7 +308,7 @@
+     /// This is the cancellation-safe fallback used by relay ownership guards:
+     /// `Drop` cannot await, but it must still ensure the task-owned QUIC stream
+     /// halves are scheduled for prompt release.
+-    pub(crate) fn shutdown_now(&self) {
++    pub fn shutdown_now(&self) {
+         drop(self.abort_tasks());
+     }
+ 
+@@ -410,14 +410,68 @@
+     /// a cryptic `"endpoint driver future was dropped"` into every
+     /// connection accepted through this tunnel.
+     pub(crate) fn new(
+-        mut send_stream: crate::high_level::SendStream,
+-        mut recv_stream: crate::high_level::RecvStream,
++        send_stream: crate::high_level::SendStream,
++        recv_stream: crate::high_level::RecvStream,
+         relay_public_addr: SocketAddr,
+         _relay_server_addr: SocketAddr,
+         original_socket: Arc<dyn AsyncUdpSocket>,
+     ) -> (Arc<Self>, Arc<RelayTunnelControl>) {
+-        let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(SEND_QUEUE_CAPACITY);
+-        let (recv_tx, recv_rx) = mpsc::channel::<(Bytes, SocketAddr)>(RECV_QUEUE_CAPACITY);
++        Self::new_inner(
++            send_stream,
++            recv_stream,
++            relay_public_addr,
++            original_socket,
++            SEND_QUEUE_CAPACITY,
++            RECV_QUEUE_CAPACITY,
++            MAX_RELAY_FRAME,
++        )
++    }
++
++    /// Adapt already-authenticated, already-admitted streams into a tunnel-only
++    /// socket. This does not perform TLS pin verification or relay admission.
++    /// The caller must keep the carrier connection alive and own explicit teardown.
++    /// No data-plane I/O uses `original_socket`; it is retained only for carrier life.
++    /// Queue capacities are entry counts, not byte limits. `max_frame` bounds each
++    /// inbound data frame; control frames retain the existing separate bound.
++    pub fn from_established_streams(
++        streams: RawRelayStreams,
++        relay_public_addr: SocketAddr,
++        original_socket: Arc<dyn AsyncUdpSocket>,
++        queue_capacity: usize,
++        max_frame: usize,
++    ) -> io::Result<(Arc<Self>, Arc<RelayTunnelControl>)> {
++        if queue_capacity == 0
++            || queue_capacity > SEND_QUEUE_CAPACITY.min(RECV_QUEUE_CAPACITY)
++            || max_frame == 0
++            || max_frame > MAX_RELAY_FRAME
++        {
++            return Err(io::Error::new(
++                io::ErrorKind::InvalidInput,
++                "invalid relay socket limits",
++            ));
++        }
++        Ok(Self::new_inner(
++            streams.send_stream,
++            streams.recv_stream,
++            relay_public_addr,
++            original_socket,
++            queue_capacity,
++            queue_capacity,
++            max_frame,
++        ))
++    }
++
++    fn new_inner(
++        mut send_stream: crate::high_level::SendStream,
++        mut recv_stream: crate::high_level::RecvStream,
++        relay_public_addr: SocketAddr,
++        original_socket: Arc<dyn AsyncUdpSocket>,
++        send_capacity: usize,
++        recv_capacity: usize,
++        max_frame: usize,
++    ) -> (Arc<Self>, Arc<RelayTunnelControl>) {
++        let (send_tx, mut send_rx) = mpsc::channel::<Bytes>(send_capacity);
++        let (recv_tx, recv_rx) = mpsc::channel::<(Bytes, SocketAddr)>(recv_capacity);
+         let state = TunnelState::new();
+         let control = RelayTunnelControl::new(Arc::clone(&state));
+ 
+@@ -517,7 +571,7 @@
+                 }
+ 
+                 let frame_len = frame_len as usize;
+-                if frame_len > MAX_RELAY_FRAME {
++                if frame_len > max_frame {
+                     tracing::warn!(frame_len, "MasqueRelaySocket: corrupt frame length");
+                     break;
+                 }

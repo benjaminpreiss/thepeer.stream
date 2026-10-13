@@ -1,0 +1,16 @@
+saorsa-pqc 0.5.2
+Author declared by upstream: David Irvine <david@saorsalabs.com>
+Repository: https://github.com/saorsa-labs/saorsa-pqc
+Source revision: b90282e5dc87a5643d0dcdb039559ea32cd6896f
+
+Upstream Cargo.toml declares "MIT OR Apache-2.0". Its README License section
+also explicitly offers either license. This distribution selects Apache-2.0.
+The accompanying LICENSE-APACHE is the unmodified canonical Apache-2.0 text.
+The published crate and recorded source tree contain no standalone license text.
+No upstream copyright notice has been invented or replaced here.
+
+License declaration:
+https://github.com/saorsa-labs/saorsa-pqc/blob/b90282e5dc87a5643d0dcdb039559ea32cd6896f/Cargo.toml
+https://github.com/saorsa-labs/saorsa-pqc/blob/b90282e5dc87a5643d0dcdb039559ea32cd6896f/README.md
+License text:
+https://www.apache.org/licenses/LICENSE-2.0.txt
