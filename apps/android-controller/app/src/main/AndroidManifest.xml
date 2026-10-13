@@ -8,7 +8,7 @@
     <application
         android:allowBackup="false"
         android:hardwareAccelerated="true"
-        android:label="thepeer"
+        android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <!-- Decode inside our own dialog, never via the library's result-Intent activity. -->

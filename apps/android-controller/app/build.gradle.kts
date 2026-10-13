@@ -23,6 +23,15 @@ android {
         targetSdk = 35
         versionCode = providers.environmentVariable("THEPEER_ANDROID_VERSION_CODE").map { it.toInt() }.orElse(6).get()
         versionName = providers.environmentVariable("THEPEER_ANDROID_VERSION_NAME").orElse("0.6-direct-relay-preview").get()
+        resValue("string", "app_name", "thepeer")
+    }
+
+    buildTypes {
+        getByName("debug") {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            resValue("string", "app_name", "thepeer (Debug)")
+        }
     }
 
     // Native forwarding only: no bundled diagnostic site or browser-controller/WASM assets.
