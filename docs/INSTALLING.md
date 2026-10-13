@@ -39,6 +39,12 @@ and download `thepeer.stream-TAG-android-arm64.apk` from the chosen release.
 Open it on the phone and approve installation from that source when Android asks.
 The app requires an arm64 phone running Android 8.0 or newer.
 
+The application ID is `stream.thepeer`; its displayed name is **thepeer**. Earlier
+prototype APKs used `dev.webp2p.controllerprobe`. The new ID installs as a separate
+app, not an update to that prototype. You can uninstall the old app after switching;
+uninstalling removes its local app data. Existing published APKs keep their original
+ID—the change takes effect in newly built APKs.
+
 The release also includes an Android license archive and `SHA256SUMS`. To verify
 assets on your computer, download all release assets into one directory and run:
 

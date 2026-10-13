@@ -13,11 +13,12 @@ plugins {
 }
 
 android {
+    // Internal Java/JNI namespace is independent of the installed application ID.
     namespace = "dev.webp2p.controllerprobe"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "dev.webp2p.controllerprobe"
+        applicationId = "stream.thepeer"
         minSdk = 26
         targetSdk = 35
         versionCode = providers.environmentVariable("THEPEER_ANDROID_VERSION_CODE").map { it.toInt() }.orElse(6).get()
