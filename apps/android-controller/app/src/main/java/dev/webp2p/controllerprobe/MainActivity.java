@@ -45,7 +45,7 @@ public final class MainActivity extends Activity {
             root.setImportantForContentCapture(View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS);
         ScrollView scroll = new ScrollView(this);
         LinearLayout content = column();
-        TextView title = text("thepeer", 28);
+        TextView title = text(getString(R.string.app_name), 28);
         title.setPadding(0, dp(16), 0, dp(24));
         content.addView(title);
         status = text("", 22); content.addView(status);

@@ -79,7 +79,7 @@ public final class ViewerService extends Service {
                     PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             Notification notification = new Notification.Builder(this, CHANNEL)
                     .setSmallIcon(android.R.drawable.ic_menu_info_details)
-                    .setContentTitle("thepeer")
+                    .setContentTitle(getString(R.string.app_name))
                     .setContentText("Connection active or connecting · tap for details")
                     .setContentIntent(open).setOngoing(true)
                     .addAction(new Notification.Action.Builder(null, "Stop", stop).build()).build();

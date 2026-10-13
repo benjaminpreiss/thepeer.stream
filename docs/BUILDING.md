@@ -77,7 +77,9 @@ bash apps/android-controller/native-build.sh
 ```
 
 Then open `apps/android-controller/` in Android Studio, Sync, select your phone,
-and perform a full **Run app**. This installs a locally debug-signed build.
+and perform a full **Run app**. This installs **thepeer (Debug)**, a locally
+debug-signed build with application ID `stream.thepeer.debug` and a `-debug`
+version suffix. It can coexist with the release app (`stream.thepeer`).
 Alternatively, with the phone connected and USB debugging authorized:
 
 ```sh
@@ -87,8 +89,10 @@ bash apps/android-controller/gradlew -p apps/android-controller :app:assembleDeb
 
 Native artifacts are intentionally not in Git. Rerun `native-build.sh` whenever
 Gradle reports missing/stale native inputs; do not bypass receipt validation.
-Locally debug-signed APKs cannot update release-signed installations (or vice versa).
-Uninstall the differently signed app first if necessary.
+Debug and release builds have separate application IDs and can coexist. Android
+Studio installs the debug app without replacing the release app. Updates within
+either ID require the same signing key; debug keys from different development
+machines may differ.
 
 ## 4. Connect
 

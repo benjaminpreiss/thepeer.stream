@@ -119,8 +119,8 @@ adb install -r /path/to/thepeer.stream-v0.1.0-android-arm64.apk
 
 Draft APKs produced by the release workflow use the release signing key. Android
 updates require the same signing identity and a compatible version code; an older
-build may be rejected. Debug-signed source builds cannot update release-signed apps
-or vice versa. Uninstalling the differently signed app removes its local app data.
+build may be rejected. Debug source builds use a separate ID, `stream.thepeer.debug`, and can coexist
+with release builds.
 
 Draft status is not a quality guarantee. Test Direct, Relay and Stop using the
 [physical testing guide](HUMAN-TESTING.md) before promoting a draft. Release
@@ -143,7 +143,9 @@ the pinned Rust toolchain, Android SDK/NDK setup and exact build commands.
 - **Android:** build/stage the native library with `native-build.sh`, then build
   and install the debug APK through Android Studio or the Gradle/ADB commands in
   the [Android source-build steps](BUILDING.md#3-build-and-install-the-phone-app).
-  This uses a local debug signing key, not the release signing key.
+  This installs **thepeer (Debug)** (`stream.thepeer.debug`), with a `-debug` version
+  suffix and a local debug signing key. The launcher, app title and notification
+  distinguish it from **thepeer** (`stream.thepeer`); both can be installed together.
 
 Use the project's build scripts rather than an unpatched root `cargo build`.
 Do not bypass native source/artifact receipt checks. If testing an exact release,
