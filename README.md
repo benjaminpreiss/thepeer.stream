@@ -43,6 +43,9 @@ The [installer](scripts/install.sh) verifies the release checksum and installs
 if needed. Supports Linux x86_64 (glibc 2.35+) and macOS 15+ (Apple silicon/Intel).
 It retains the archive containing licenses under `~/.local/share/thepeer.stream/`.
 
+You can also install a draft release or build from source; see the
+[installation guide](docs/INSTALLING.md).
+
 ### Phone app
 
 Download the signed `android-arm64.apk` from
@@ -50,7 +53,8 @@ Download the signed `android-arm64.apk` from
 it on your phone, and allow installation when Android prompts. Requires an arm64
 phone running Android 8.0 or newer and a browser such as Chrome or Brave.
 
-For local development, [build from a fresh clone](docs/BUILDING.md).
+You can also install a draft release or build from source; see the
+[installation guide](docs/INSTALLING.md).
 
 ## How to
 
