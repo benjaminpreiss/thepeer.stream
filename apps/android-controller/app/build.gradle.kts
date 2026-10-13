@@ -92,7 +92,8 @@ tasks.named("preBuild") { dependsOn(verifyNativeProbe) }
 
 // Resolved release dependencies only; copied to an ignored build directory for
 // notice collection, never packaged wholesale into a release asset.
-tasks.register("collectReleaseDependencies") {
+// AGP owns collectReleaseDependencies; keep our notice export task distinct.
+tasks.register("collectThepeerReleaseDependencies") {
     doLast {
         val configuration = configurations.getByName("releaseRuntimeClasspath")
         val output = layout.buildDirectory.dir("release-dependencies").get().asFile

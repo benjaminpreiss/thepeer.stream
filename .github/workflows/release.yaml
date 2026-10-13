@@ -136,7 +136,7 @@ jobs:
       - name: Build and verify native transport, then assemble unsigned APK
         run: |
           bash apps/android-controller/native-build.sh
-          bash apps/android-controller/gradlew -p apps/android-controller --no-daemon :app:assembleRelease :app:collectReleaseDependencies
+          bash apps/android-controller/gradlew -p apps/android-controller --no-daemon :app:assembleRelease :app:collectThepeerReleaseDependencies
           cargo +"$THEPEER_RUST_TOOLCHAIN" metadata --locked --offline --format-version 1 --filter-platform aarch64-linux-android > "$RUNNER_TEMP/metadata.json"
       - name: Sign, verify and package APK
         env:
