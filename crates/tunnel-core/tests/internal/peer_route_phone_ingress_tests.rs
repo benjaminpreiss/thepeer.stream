@@ -17,7 +17,7 @@ async fn healthy_phone_refuses_unsolicited_tls(route: Route, abandon: bool) {
         let participant = if route == Route::Direct { None } else { Some(node(route == Route::Relay).await) };
         let config = HelperConfig {
             bind: "127.0.0.1:0".parse().unwrap(),
-            target_port: target.local_addr().unwrap().port(),
+            target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(),
             observer: None,
         };
         let (helper, mut offer) = if route == Route::Relay {
@@ -96,7 +96,7 @@ async fn healthy_phone_refuses_unsolicited_tls(route: Route, abandon: bool) {
         let response = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build().unwrap()
             .get(format!("http://{browser_addr}/fixture")).header("Host", authority).send().await.unwrap();
         assert_eq!(response.status(), 200);
-        assert!(response.headers()["content-security-policy"].to_str().unwrap().contains("script-src 'self'"));
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(), "ok");
         target_task.await.unwrap();
         // Clean up before the admission assertion, including on the expected red.

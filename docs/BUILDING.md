@@ -39,7 +39,7 @@ cargo +"$THEPEER_RUST_TOOLCHAIN" fetch --locked
 
 Keep `THEPEER_RUST_TOOLCHAIN` set for subsequent build commands in this shell.
 
-## 2. Build and run the desktop helper
+## 2. Build and run the CLI
 
 ```sh
 bash scripts/build-helper.sh
@@ -55,11 +55,11 @@ node tests/fixtures/application-app.mjs 3002
 In another interactive terminal, from the repository root:
 
 ```sh
-./target/build/debug/thepeer --target-port 3002
+./target/build/debug/thepeer --target localhost:3002
 ```
 
 It displays a live pairing QR. Do not redirect, save or screenshot it. Keep the
-helper and target application running. See [helper options](HOST-HELPER.md) for
+CLI and target application running. See [CLI options](CLI.md) for
 interface selection and optional relay configuration.
 
 ## 3. Build and install the phone app
@@ -100,7 +100,7 @@ Use the phone app's **Connect** button to scan the terminal QR. If Android asks
 for camera permission, grant it and tap Connect again. The phone app connects and
 opens the tunneled web application in the browser. Start with both devices on the
 same network. Tap **Stop** in the phone app to end access; `q` or Ctrl-C also stops
-the computer helper. Restart the helper to create a fresh QR for another session.
+the CLI. Restart the CLI to create a fresh QR for another session.
 
 ## Tests
 
@@ -122,4 +122,4 @@ bash apps/android-controller/test-native.sh
 ```
 
 Host checks do not substitute for [physical testing](HUMAN-TESTING.md).
-See [releasing](RELEASING.md) for signed APKs and packaged helper binaries.
+See [releasing](RELEASING.md) for signed APKs and packaged CLI binaries.

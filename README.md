@@ -10,7 +10,7 @@ Post-quantum-secure, peer-to-peer tunneling for local services. Connect directly
 ┌────────────────────────┐                  ┌────────────────────────┐
 │ Local web application  │                  │        Browser         │
 │           ↕            │                  │           ↕            │
-│  ┌─ Terminal helper ┐  │                  │  ┌─ App ────────────┐  │
+│  ┌─ CLI ────────────┐  │                  │  ┌─ App ────────────┐  │
 │  │    ▄▄▄ ▄ ▄▄▄     │  │                  │  │    ┌─      ─┐    │  │
 │  │    █ █ ▀ █ █     │  │◄════ Tunnel ════►│  │                  │  │
 │  │    ▀▀▀ ▄ ▀▀▀     │  │                  │  │    └─      ─┘    │  │
@@ -30,7 +30,7 @@ Post-quantum-secure, peer-to-peer tunneling for local services. Connect directly
 
 ## Installation
 
-### Terminal helper
+### CLI
 
 Install the latest version with:
 
@@ -60,16 +60,16 @@ You can also install a draft release or build from source; see the
 
 ### Start
 
-**1. Run the desktop helper in your computer’s terminal.** It displays a QR code for your local web application.
+**1. Run the CLI in your computer’s terminal.** It displays a QR code for your local web application.
 
 For a web application already running on your computer at `http://127.0.0.1:3000`:
 
 ```sh
-thepeer --target-port 3000
+thepeer --target localhost:3000
 ```
 
-Replace `3000` with your application's port. Keep the helper running in an interactive
-terminal. For optional relay fallback, add `--relay IP:PORT` using a compatible
+Replace `3000` with your application's port.
+Keep the CLI running in an interactive terminal. For optional relay fallback, add `--relay IP:PORT` using a compatible
 relay you have permission to use; no relay is configured by default.
 
 **2. Open the thepeer phone app**, tap **Connect**, and scan the QR code.
@@ -83,10 +83,13 @@ relay you have permission to use; no relay is configured by default.
 - Tap **Stop** in the phone app to end access.
 - There is no healthy-session timer.
 
-## Capabilities
+## Features
 
-HTTP, API writes, cookies, local redirects, SSE and WebSockets are supported within
-bounded HTTP/resource policies. No VPN or system proxy is required.
+- ✅ HTTP, API writes, cookies, local redirects, SSE and WebSockets within bounded HTTP/resource policies.
+- ✅ No VPN or system proxy required.
+- ✅ Local targets: `localhost:PORT`, `127.0.0.1:PORT`, `[::1]:PORT`, or a hostname that resolves only to loopback addresses.
+- ✅ Hostnames resolved once before pairing.
+- ❌ Remote targets, URL-form targets and HTTPS upstreams are not supported.
 
 ## Packages
 
@@ -100,7 +103,7 @@ tests/fixtures/          Disposable localhost application for host/phone checks
 
 - [Architecture: components, connection flow and Saorsa](docs/ARCHITECTURE.md)
 - [Build from source](docs/BUILDING.md)
-- [Build/run the helper](docs/HOST-HELPER.md)
+- [Build/run the CLI](docs/CLI.md)
 - [Create a draft release](docs/RELEASING.md)
 - [Build the Android app](apps/android-controller/README.md)
 - [Validation status and known limitations](docs/STATUS.md)

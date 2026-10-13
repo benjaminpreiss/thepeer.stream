@@ -117,7 +117,9 @@ async fn authenticated_ineligible_observation_returns_no_offer_or_target_access(
             let stop = CancellationToken::new();
             let config = HelperConfig {
                 bind,
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: (!relay_only).then_some(remote.local_addr().unwrap()),
             };
             let participant = remote.local_addr().unwrap();

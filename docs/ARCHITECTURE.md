@@ -19,7 +19,7 @@ physical validation remain separate gates; see [release readiness](RELEASE-READI
 COMPUTER                                     ANDROID PHONE
 
 Local web application                        Ordinary browser
-127.0.0.1:3000                                http://thepeer-<nonce>.localhost:PORT
+localhost:3000                                http://thepeer-<nonce>.localhost:PORT
        ^                                               |
        | localhost TCP/HTTP                            | loopback HTTP
        v                                               v
@@ -31,7 +31,7 @@ Local web application                        Ordinary browser
 | Shared Rust core:           |              | JNI bridge to Rust          |
 | - fixed-target forwarding   |              | Shared Rust core:           |
 | - grant authorization       |              | - local HTTP gateway        |
-| - helper admission/cleanup  |              | - route/pin/grant handling  |
+| - CLI admission/cleanup     |              | - route/pin/grant handling  |
 |                             |              | - connection/Stop ownership |
 | Saorsa peer transport       | <==========> | Saorsa peer transport       |
 +-----------------------------+              +-----------------------------+
@@ -41,9 +41,9 @@ Local web application                        Ordinary browser
 
 The browser does **not** run Saorsa, WebRTC or a tunnel service worker. It talks to
 the app's local gateway. The local web application needs no Saorsa integration;
-it receives ordinary localhost traffic from the helper.
+it receives ordinary localhost traffic from the CLI.
 
-The remote leg is encrypted peer-to-peer. The browser-to-app and helper-to-target
+The remote leg is encrypted peer-to-peer. The browser-to-app and CLI-to-target
 legs are local HTTP/TCP, not additional end-to-end TLS sessions.
 
 ## 2. Our components and their responsibilities
@@ -71,10 +71,10 @@ binary: thepeer                                   |
 
 These crates are libraries linked into the two applications, not separate daemons.
 Both applications share the core; the core's `host` feature enables desktop-only
-helper functionality.
+CLI functionality.
 
 - **[CLI](../crates/cli/src/main.rs):** Parse target/participant options, select a
-  local interface, prepare the helper, display a live terminal QR and handle terminal Stop.
+  local interface, prepare the CLI, display a live terminal QR and handle terminal Stop.
 - **[Android app](../apps/android-controller/):** Connect/Stop UI, bounded camera
   scanning, in-memory handoff, foreground notification and browser launch. ZXing
   decodes QR symbols; our code validates the offer.
@@ -121,7 +121,7 @@ We do not run an Autonomi node or import an entire decentralized network stack.
   preserves separate relay-contact provenance and owns allocation/session cleanup.
 - **Admission and lifecycle:** Saorsa supplies transport callbacks and connection
   handles, extended by our patches. Thepeer implements phone-side refusal, bounded
-  helper admission, application authorization and Stop semantics.
+  CLI admission, application authorization and Stop semantics.
 
 The route planner also adapts a conservative shared-WAN rule from **Saorsa-core**,
 with its MIT notice retained. This is attributed application code, not a runtime
@@ -169,6 +169,33 @@ separate services:
 - **Both options:** use the explicit observer for routing observations and the
   configured relay for Relay allocation. They need not be the same service.
 
+### Target resolution at CLI startup
+
+On the computer, the CLI RESOLVES THE TARGET ONCE AT STARTUP, before publishing
+the pairing QR.
+
+```text
+  --target localhost:3000
+              │
+              ▼
+  ┌─────────────────┐  hostname  ┌──────────────────┐
+  │ CLI             │ ─────────► │ Operating system │
+  │                 │ ◄───────── │ hosts file / DNS │
+  └────────┬────────┘ IP addresses└──────────────────┘
+           │          in OS order
+           ▼
+     All loopback? ── no / empty ──► Reject
+           │ yes
+           ▼
+  ┌───────────────────────────────────────────────┐
+  │ Save addresses + port → finish setup → QR     │
+  └───────────────────────────────────────────────┘
+```
+
+Explicit IP targets skip the OS lookup but still require loopback validation.
+See [local HTTP target rules](CLI.md#local-http-target) for accepted syntax,
+validation limits, deadlines and connection behavior.
+
 ### Preparation and address observation
 
 The observer and relay below are separate **roles**, not necessarily separate servers.
@@ -177,7 +204,7 @@ happens before displaying the QR—even if Direct later succeeds. “Direct firs
 refers to selecting the application traffic route, not delaying relay preparation.
 
 ```text
-Computer helper             Observer role                 Relay role
+CLI                         Observer role                 Relay role
       |                           |                            |
       |-- what address am I? ---->|                            |
       |<-- observed IP:port ------|                            |
@@ -202,7 +229,7 @@ The connection below is between phone and computer, either directly or through
 the separately prepared relay. The observer is not in the application data path.
 
 ```text
-Computer helper                                      Phone app
+CLI                                                  Phone app
       |                                                   |
       |<=========== establish peer TLS connection =======>|
       |                                                   | check computer key
@@ -220,13 +247,13 @@ observed address becomes a Direct routing hint; the phone's observed IP helps de
 whether trying a local address makes sense, for example when both devices appear
 to share the same public IP. Observation does not prove they can reach each other.
 
-The helper's `--observer IP:PORT` option selects this service explicitly. Otherwise,
+The CLI's `--observer IP:PORT` option selects this service explicitly. Otherwise,
 a configured relay also serves as the observer. Its address is included in the QR
 so the phone can obtain its own observation. The observer role only supplies address
 information: it receives no application grant and does not forward web traffic.
 A service acting as a relay performs that separate forwarding role too.
 
-The relay service address, observed helper address and allocated relay contact
+The relay service address, observed CLI address and allocated relay contact
 have different roles and must not be interchanged.
 
 The QR is an **out-of-band bearer capability**, not just a server URL. It contains
@@ -263,7 +290,7 @@ sessions; it is not a public DNS name or the tunnel's application grant.
 ```
 
 The computer first opens a connection to the relay. The relay reserves an IP address
-and port for reaching that computer, which the helper includes in the QR. The phone
+and port for reaching that computer, which the CLI includes in the QR. The phone
 sends encrypted packets to that reserved address; the relay forwards them to the
 computer over the connection the computer already opened. Replies travel back through
 the relay in reverse.
@@ -320,6 +347,8 @@ See [offer and candidate policy](ROUTING-OFFER.md) for exact rules.
 
 ## 6. How a browser request reaches the target
 
+### Request and response flow
+
 After peer authentication and grant authorization, our adapter presents a
 bidirectional QUIC stream as a readable/writable socket to Hyper. Hyper parses and
 serializes HTTP; Saorsa handles encrypted, reliable transport.
@@ -346,9 +375,9 @@ COMPUTER
      | Decrypts, handles missing packets and restores
      | ordered stream bytes on the authorized connection
      v
-  +-- Computer helper -------------------------------------+
+  +-- CLI -------------------------------------------------+
   | Accept the stream on the authorized connection         |
-  | Open TCP to the fixed 127.0.0.1:TARGET_PORT            |
+  | Open TCP using only pinned loopback target addresses   |
   | Forward bytes between that TCP socket and the stream   |
   +--------------------------------------------------------+
      |
@@ -357,22 +386,36 @@ COMPUTER
 
 RESPONSE — reverse direction of the same QUIC stream
   Local web application
-    -> helper copies TCP response bytes into the stream
+    -> CLI copies TCP response bytes into the stream
     -> Saorsa encrypted transport
     -> phone gateway: Hyper parses the HTTP response
     -> gateway applies response policy (headers, cookies, redirects)
     -> browser
 ```
 
-The phone gateway handles browser-facing HTTP policy, local redirects, cookies and
-CSP handling. HTTP/API writes, SSE and WebSocket upgrades are supported within the
-implemented limits. The helper cannot be instructed to dial an arbitrary URL or
-host: its target was fixed by `--target-port` before pairing. This is not a general
-SOCKS proxy or device-wide VPN.
+The phone gateway connects the browser's temporary session address to your local
+app. It has three main responsibilities:
+
+- **Check each request.** Only requests allowed for the current session are
+  forwarded. The browser cannot change the local app selected by `--target`.
+- **Adapt HTTP addresses.** The CLI securely tells the phone the app's hostname
+  and port. The phone uses that information to adjust request headers and
+  redirects—not to look up or connect to the app itself. The CLI makes that
+  connection on the computer.
+- **Pass through your app's content.** API writes, SSE and WebSockets are supported
+  within resource limits. The app's own browser security policy (CSP) is preserved;
+  no tunnel CSP is added. External resources load directly from the browser.
+  URLs inside HTML, JavaScript and CSS are not rewritten.
+
+This is access to one local app, not a general-purpose proxy or device-wide VPN.
+For the detailed rules on headers, redirects and cookies, see
+[HTTP adaptation](CLI.md#http-adaptation). For connection order, timeouts and why
+requests are never replayed after connecting, see
+[local HTTP target rules](CLI.md#local-http-target).
 
 Admission, concurrent work, headers/bodies, per-stream byte forwarding and stalled
 operations are bounded. Those limits are **not** a healthy-session timer or a
-cumulative request-count ceiling. The first helper TLS winner consumes the one-shot
+cumulative request-count ceiling. The first CLI TLS winner consumes the one-shot
 attempt; a hostile first winner can deny availability even without passing the grant.
 
 ### What goes into a QUIC packet
@@ -399,7 +442,7 @@ not require a new TLS handshake; requests share the authorized QUIC connection.
 ```text
 Android Stop / service teardown       Terminal q / Ctrl-C
               |                               |
-      Native cancellation owner          Helper owner
+      Native cancellation owner          CLI owner
               |                               |
               +----- session work stops ------+
                               |
@@ -410,12 +453,12 @@ Android Stop / service teardown       Terminal q / Ctrl-C
 ```
 
 The phone installs a permanently closed unsolicited-ingress handler from endpoint
-construction. The helper uses bounded admission instead. Neither client serves as
+construction. The CLI uses bounded admission instead. Neither client serves as
 a public relay, enables UPnP or advertises unwanted services.
 
 Scanning has its own cancel/background/60-second expiry behavior; it does not limit
 an established session. There is no automatic resurrection after Stop or failure.
-A new connection requires a fresh helper offer. Remote relay reservation retention
+A new connection requires a fresh CLI offer. Remote relay reservation retention
 is upstream policy: withdrawing access does not promise immediate remote FD/quota
 reclamation. Configured connection limits are not proof of a global resource cap.
 

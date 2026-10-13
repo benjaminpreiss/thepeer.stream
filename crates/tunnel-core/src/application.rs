@@ -1,5 +1,5 @@
 //! One authenticated application; HTTP policy at the phone, opaque streams at the helper.
-//! No destination is supplied by a browser or by a data stream. No automatic retries.
+//! No destination is supplied by a browser or by a data stream. No HTTP request replay.
 use crate::http::{read_frame, write_frame};
 use crate::{Failure, Result};
 #[cfg(all(test, feature = "host"))]
@@ -20,7 +20,7 @@ use std::{
     task::{Context, Poll},
     time::Duration,
 };
-#[cfg(feature = "host")]
+#[cfg(all(test, feature = "host"))]
 use tokio::net::TcpStream;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
@@ -186,7 +186,7 @@ pub struct Session {
     #[cfg(all(test, feature = "host"))]
     _endpoint: Option<EndpointGuard>,
     connection: ConnectionGuard,
-    target_port: u16,
+    target: crate::target::Target,
     permits: Arc<Semaphore>,
 }
 impl Session {
@@ -284,21 +284,30 @@ impl Session {
         struct Ack {
             v: u8,
             r#type: String,
-            #[serde(rename = "targetPort")]
-            target_port: u16,
+            #[serde(rename = "targetAuthority")]
+            target_authority: String,
         }
         let ack = read_frame(&mut recv)
             .await?
             .ok_or(Failure("application-auth-ack"))?;
         let ack: Ack = serde_json::from_slice(&ack).map_err(|_| Failure("application-auth-ack"))?;
-        if ack.v != 1 || ack.r#type != "application-authorized" || ack.target_port == 0 {
+        if ack.v != 2 || ack.r#type != "application-authorized" {
+            return Err(Failure("application-auth-ack"));
+        }
+        // Authenticated HTTP metadata, never a destination the phone resolves.
+        // The helper alone owns the pinned numeric sockets.
+        let target = ack
+            .target_authority
+            .parse::<crate::target::Target>()
+            .map_err(|_| Failure("application-auth-ack"))?;
+        if target.authority() != ack.target_authority {
             return Err(Failure("application-auth-ack"));
         }
         Ok(Self {
             #[cfg(all(test, feature = "host"))]
             _endpoint: None,
             connection,
-            target_port: ack.target_port,
+            target,
             permits: Arc::new(Semaphore::new(PARALLEL)),
         })
     }
@@ -415,7 +424,7 @@ fn strip_hop(headers: &mut header::HeaderMap, upgrade: bool) {
 fn response_policy(
     response: &mut Response<Incoming>,
     authority: &str,
-    target: u16,
+    target: &crate::target::Target,
     upgrade: bool,
 ) -> std::result::Result<(), ()> {
     let h = response.headers_mut();
@@ -424,19 +433,31 @@ fn response_policy(
     }
     if let Some(location) = h.get(header::LOCATION) {
         let value = location.to_str().map_err(|_| ())?.trim();
-        if value.contains('\\') || value.starts_with("//") {
+        if value.contains('\\')
+            || value.starts_with("//")
+            || value
+                .bytes()
+                .any(|b| b.is_ascii_control() || b.is_ascii_whitespace())
+        {
             return Err(());
         }
-        let mut rewritten = None;
-        for host in ["127.0.0.1", "localhost"] {
-            let base = format!("http://{host}:{target}/");
-            if let Some(path) = value.strip_prefix(&base) {
-                rewritten = Some(format!("http://{authority}/{path}"));
+        if let Some(rest) = value.strip_prefix("http://") {
+            let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+            let host = &rest[..end];
+            if host != target.authority() && host != authority {
+                return Err(());
             }
-        }
-        if let Some(value) = rewritten {
-            h.insert(header::LOCATION, value.parse().map_err(|_| ())?);
-        } else if value.contains(':') && !value.starts_with(&format!("http://{authority}/")) {
+            let suffix = &rest[end..];
+            let separator = if suffix.starts_with('/') { "" } else { "/" };
+            let rewritten = format!("http://{authority}{separator}{suffix}");
+            h.insert(header::LOCATION, rewritten.parse().map_err(|_| ())?);
+        } else if value
+            .split(['/', '?', '#'])
+            .next()
+            .unwrap_or("")
+            .contains(':')
+        {
+            // Reject other schemes, but allow colons inside relative paths/queries.
             return Err(());
         }
     }
@@ -478,8 +499,8 @@ fn response_policy(
             "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
         ),
     );
-    // Preserve any stricter target CSP as an additional policy. Workers remain deferred.
-    h.append(header::CONTENT_SECURITY_POLICY, format!("default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://{authority}; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob:; worker-src 'none'; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'self'").parse().map_err(|_| ())?);
+    // Browser resource policy belongs to the application. Preserve its CSP and
+    // report-only headers without injecting an additional tunnel policy.
     Ok(())
 }
 
@@ -522,7 +543,33 @@ async fn proxy(
         return error(StatusCode::SERVICE_UNAVAILABLE);
     };
     let browser_upgrade = hyper::upgrade::on(&mut req);
+    let had_origin = req.headers().contains_key(header::ORIGIN);
     strip_hop(req.headers_mut(), upgrade);
+    let forwarding: Vec<_> = req
+        .headers()
+        .keys()
+        .filter(|name| {
+            name.as_str() == "forwarded"
+                || name.as_str().starts_with("x-forwarded-")
+                || name.as_str() == "x-real-ip"
+        })
+        .cloned()
+        .collect();
+    for name in forwarding {
+        req.headers_mut().remove(name);
+    }
+    let Ok(host) = header::HeaderValue::from_str(session.target.authority()) else {
+        return error(StatusCode::BAD_GATEWAY);
+    };
+    req.headers_mut().insert(header::HOST, host);
+    if had_origin {
+        // Original Origin was validated above, before rewriting or stripping.
+        let Ok(origin) = header::HeaderValue::from_str(&format!("http://{}", session.target))
+        else {
+            return error(StatusCode::BAD_GATEWAY);
+        };
+        req.headers_mut().insert(header::ORIGIN, origin);
+    }
     let opened = timeout(Duration::from_secs(10), async {
         let (send, recv) = session.connection.open_bi().await.map_err(|_| ())?;
         let (mut sender, connection) = hyper::client::conn::http1::Builder::new()
@@ -550,7 +597,7 @@ async fn proxy(
     {
         return error(StatusCode::BAD_GATEWAY);
     }
-    if response_policy(&mut response, &authority, session.target_port, switching).is_err() {
+    if response_policy(&mut response, &authority, &session.target, switching).is_err() {
         return error(StatusCode::BAD_GATEWAY);
     }
     if switching {
@@ -682,7 +729,14 @@ async fn serve_target_scoped(
     target_port: u16,
     counts: &mut crate::http::host::Counts,
 ) -> Result<()> {
-    let result = serve_target_inner(endpoint, peer, inspector, target_port, counts).await;
+    let result = serve_target_inner(
+        endpoint,
+        peer,
+        inspector,
+        crate::target::PreparedTarget::loopback(target_port),
+        counts,
+    )
+    .await;
     if result.is_err() {
         counts.failed += 1;
         counts.publish();
@@ -695,7 +749,7 @@ async fn serve_target_inner(
     endpoint: &Endpoint,
     peer: Option<SocketAddr>,
     inspector: crate::http::inspector::HttpInspector,
-    target_port: u16,
+    target: crate::target::PreparedTarget,
     counts: &mut crate::http::host::Counts,
 ) -> Result<()> {
     use std::net::Ipv4Addr;
@@ -717,24 +771,24 @@ async fn serve_target_inner(
         .await
         .map_err(|_| Failure("application-handshake-timeout"))?
         .map_err(|_| Failure("application-handshake"))?;
-    serve_connection(ConnectionGuard(connection), inspector, target_port, counts).await
+    serve_connection(ConnectionGuard(connection), inspector, target, counts).await
 }
 
 /// Serve one already accepted TLS connection, retaining its authoritative handle.
 /// The endpoint owner must disable other application bidirectional-stream readers.
 /// The fresh grant authorizes access before any fixed localhost target is opened.
 #[cfg(feature = "host")]
-pub fn serve_peer(
+pub fn serve_prepared_peer(
     connection: HighLevelConnection,
     inspector: crate::http::inspector::HttpInspector,
-    target_port: u16,
+    target: crate::target::PreparedTarget,
     counts: &mut crate::http::host::Counts,
 ) -> impl Future<Output = Result<()>> + '_ {
     let connection = ConnectionGuard(connection);
     async move {
         counts.admitted += 1;
         counts.publish();
-        let result = serve_connection(connection, inspector, target_port, counts).await;
+        let result = serve_connection(connection, inspector, target, counts).await;
         if result.is_err() {
             counts.failed += 1;
             counts.publish();
@@ -743,14 +797,28 @@ pub fn serve_peer(
     }
 }
 
+#[cfg(all(test, feature = "host"))]
+pub(crate) fn serve_peer(
+    connection: HighLevelConnection,
+    inspector: crate::http::inspector::HttpInspector,
+    port: u16,
+    counts: &mut crate::http::host::Counts,
+) -> impl Future<Output = Result<()>> + '_ {
+    serve_prepared_peer(
+        connection,
+        inspector,
+        crate::target::PreparedTarget::loopback(port),
+        counts,
+    )
+}
+
 #[cfg(feature = "host")]
 async fn serve_connection(
     connection: ConnectionGuard,
     mut inspector: crate::http::inspector::HttpInspector,
-    target_port: u16,
+    target: crate::target::PreparedTarget,
     counts: &mut crate::http::host::Counts,
 ) -> Result<()> {
-    use std::net::Ipv4Addr;
     let scope = Scope::new();
     let work = async {
         let (mut send, mut recv) = timeout(Duration::from_secs(30), connection.accept_bi())
@@ -767,7 +835,7 @@ async fn serve_connection(
             .await
             .map_err(|_| Failure("application-auth-denied"))?;
         let ack = serde_json::to_vec(
-            &serde_json::json!({"v":1,"type":"application-authorized","targetPort":target_port}),
+            &serde_json::json!({"v":2,"type":"application-authorized","targetAuthority":target.target.authority()}),
         )
         .map_err(|_| Failure("application-auth-ack"))?;
         write_frame(&mut send, &ack).await?;
@@ -790,14 +858,11 @@ async fn serve_connection(
                 .map_err(|_| Failure("application-concurrency"))?;
             counts.fetched = counts.fetched.saturating_add(1);
             counts.publish();
+            let target = target.clone();
             scope.spawn(async move {
                 let _permit = permit;
-                if let Ok(Ok(mut target)) = timeout(
-                    Duration::from_secs(5),
-                    TcpStream::connect((Ipv4Addr::LOCALHOST, target_port)),
-                )
-                .await
-                {
+                // Only the pinned numeric loopback addresses; no DNS or replay.
+                if let Ok(mut target) = target.connect().await {
                     let _ = tokio::io::copy_bidirectional(
                         &mut BudgetIo::new(Duplex { send, recv }),
                         &mut target,

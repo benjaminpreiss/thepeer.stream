@@ -71,7 +71,7 @@ async fn browser_http_and_stop_use_the_existing_peer_connection() {
         let response=reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build().unwrap()
             .get(format!("http://{browser}/fixture")).header("Host",authority).send().await.unwrap();
         assert_eq!(response.status(),200);
-        assert!(response.headers()["content-security-policy"].to_str().unwrap().contains("script-src 'self'"));
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(),"peer fixture");
         let _=stop.send(());
         let(result,counts)=counts_rx.await.unwrap();result?;

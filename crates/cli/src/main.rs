@@ -26,7 +26,7 @@ type Result<T> = std::result::Result<T, Failure>;
 #[path = "../tests/internal/bind_tests.rs"]
 mod bind_tests;
 
-const USAGE: &str = "Usage: thepeer --target-port PORT [--bind IP:PORT] [--observer IP:PORT] [--relay IP:PORT]\nAutomatically select the local source address toward the participant (otherwise an IPv4 routing hint).\nOptional --bind overrides selection with an explicit unicast IP (port 0 allowed). Target is fixed localhost.\nParticipant options perform network bootstrap; no relay is operated by this helper.\nInteractive terminal required. Use the matching thepeer Android app.\nThe phone tries eligible Direct candidates then Relay; no coordinated punching.";
+const USAGE: &str = "Usage: thepeer --target HOST:PORT [--bind IP:PORT] [--observer IP:PORT] [--relay IP:PORT]\nAutomatically select the local source address toward the participant (otherwise an IPv4 routing hint).\nOptional --bind overrides selection with an explicit unicast IP (port 0 allowed). Plain HTTP target: hostname:PORT or [IPv6]:PORT. Resolve once; every address must be loopback. No URLs or HTTPS.\nParticipant options perform network bootstrap; no relay is operated by this helper.\nInteractive terminal required. Use the matching thepeer Android app.\nThe phone tries eligible Direct candidates then Relay; no coordinated punching.";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
@@ -41,7 +41,7 @@ async fn main() -> ExitCode {
 
 struct Arguments {
     bind: Option<SocketAddr>,
-    target_port: u16,
+    target: tunnel_core::target::Target,
     observer: Option<SocketAddr>,
     relay: Option<SocketAddr>,
 }
@@ -54,14 +54,10 @@ fn arguments(args: &[String]) -> Result<Arguments> {
     for pair in args.chunks_exact(2) {
         match pair[0].as_str() {
             "--bind" if bind.is_none() => bind = Some(address(&pair[1], true)?),
-            "--target-port" if target.is_none() => {
-                target = Some(
-                    pair[1]
-                        .parse::<u16>()
-                        .ok()
-                        .filter(|p| *p != 0)
-                        .ok_or(Failure("helper-arguments"))?,
-                );
+            "--target" if target.is_none() => {
+                let parsed: tunnel_core::target::Target =
+                    pair[1].parse().map_err(|_| Failure("helper-arguments"))?;
+                target = Some(parsed);
             }
             "--observer" if observer.is_none() => observer = Some(address(&pair[1], false)?),
             "--relay" if relay.is_none() => relay = Some(address(&pair[1], false)?),
@@ -70,7 +66,7 @@ fn arguments(args: &[String]) -> Result<Arguments> {
     }
     Ok(Arguments {
         bind,
-        target_port: target.ok_or(Failure("helper-arguments"))?,
+        target: target.ok_or(Failure("helper-arguments"))?,
         observer,
         relay,
     })
@@ -96,7 +92,7 @@ impl Arguments {
         Ok((
             HelperConfig {
                 bind,
-                target_port: self.target_port,
+                target: self.target,
                 observer: self.observer,
             },
             self.relay,
@@ -147,7 +143,7 @@ async fn run() -> Result<()> {
         return Err(Failure("helper-terminal"));
     }
     let (config, relay) = arguments(&args)?.resolve()?;
-    let mut ui = Surface::enter(config.target_port)?;
+    let mut ui = Surface::enter(config.target.to_string())?;
     let stop = CancellationToken::new();
     let preparing = async {
         match relay {
@@ -215,7 +211,7 @@ impl Drop for Restore {
     }
 }
 struct Surface {
-    target_port: u16,
+    target: String,
     qr: Option<Zeroizing<String>>,
     status: &'static str,
     hidden: bool,
@@ -225,7 +221,7 @@ struct Surface {
     _restore: Restore,
 }
 impl Surface {
-    fn enter(target_port: u16) -> Result<Self> {
+    fn enter(target: String) -> Result<Self> {
         #[cfg(unix)]
         let terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
             .map_err(|_| Failure("helper-signal"))?;
@@ -234,7 +230,7 @@ impl Surface {
         execute!(io::stdout(), EnterAlternateScreen, cursor::Hide)
             .map_err(|_| Failure("helper-terminal"))?;
         Ok(Self {
-            target_port,
+            target,
             qr: None,
             status: "Preparing (q to cancel)",
             hidden: false,
@@ -261,10 +257,7 @@ impl Surface {
             cursor::MoveTo(0, 1),
             Print(self.status),
             cursor::MoveTo(0, 2),
-            Print(format!(
-                "Fixed target: http://127.0.0.1:{}",
-                self.target_port
-            ))
+            Print(format!("Fixed HTTP target: {}", self.target))
         )
         .map_err(|_| Failure("helper-terminal"))?;
         if let Some(qr) = &self.qr {

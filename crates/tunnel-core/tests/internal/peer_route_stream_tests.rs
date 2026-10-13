@@ -19,7 +19,7 @@ async fn dropping_active_relay_browser_serving_closes_sse_target_and_phone_socke
         let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let (helper, mut offer) = Helper::prepare_with_relay(HelperConfig {
             bind: "127.0.0.1:0".parse().unwrap(),
-            target_port: target.local_addr().unwrap().port(), observer: None,
+            target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(), observer: None,
         }, relay.local_addr().unwrap(), &helper_stop).await.unwrap();
         let quiet = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         offer.set_direct_candidate(quiet.local_addr().unwrap());
@@ -100,7 +100,7 @@ async fn dropping_helper_during_relay_websocket_closes_both_streams_without_reco
         let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let (helper, mut offer) = Helper::prepare_with_relay(HelperConfig {
             bind: "127.0.0.1:0".parse().unwrap(),
-            target_port: target.local_addr().unwrap().port(), observer: None,
+            target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(), observer: None,
         }, relay.local_addr().unwrap(), &helper_stop).await.unwrap();
         let helper_address = offer.direct_candidate();
         let quiet = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -191,7 +191,9 @@ async fn stop_during_observation_is_terminal_with_relay_available() {
         let (helper, mut offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: relay.local_addr(),
             },
             relay.local_addr().unwrap(),

@@ -56,7 +56,7 @@ async fn authorization_edge(case: Case, stop_first: bool) {
         let _helper_guard = helper_stop.clone().drop_guard();
         let (mut helper, mut offer) = Helper::prepare(HelperConfig {
             bind: "127.0.0.1:0".parse().unwrap(),
-            target_port: target.local_addr().unwrap().port(), observer: None,
+            target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(), observer: None,
         }, &helper_stop).await.unwrap();
         let helper_bind = offer.direct_candidate();
         let reservation = UdpSocket::bind("127.0.0.1:0").await.unwrap();
@@ -179,7 +179,7 @@ async fn authorization_edge(case: Case, stop_first: bool) {
                 timeout(Duration::from_secs(4), browser.read_to_end(&mut response)).await.unwrap().unwrap();
                 let response = String::from_utf8(response).unwrap();
                 assert!(response.starts_with("HTTP/1.1 200"));
-                assert!(response.to_ascii_lowercase().contains("content-security-policy:"));
+                assert!(!response.to_ascii_lowercase().contains("content-security-policy:"));
                 assert!(response.ends_with("ok"));
                 phone_stop.cancel();
             }

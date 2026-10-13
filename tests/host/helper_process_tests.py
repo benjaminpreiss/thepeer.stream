@@ -25,7 +25,7 @@ def redirected(binary):
     master, slave = os.openpty()
     try:
         for stdin in (subprocess.DEVNULL, slave):
-            result = subprocess.run([binary, '--bind', '127.0.0.1:0', '--target-port', '3002'],
+            result = subprocess.run([binary, '--bind', '127.0.0.1:0', '--target', 'localhost:3002'],
                                     stdin=stdin, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, timeout=10)
             check(result.returncode != 0, 'redirected helper unexpectedly succeeded')
@@ -42,11 +42,15 @@ def rejected_arguments(binary):
     try:
         for args in [
             ['--qr-test'], ['--masque-app', '127.0.0.1', '127.0.0.2', '3002'],
-            ['--bind', '0.0.0.0:0', '--target-port', '3002'],
-            ['--bind', '127.0.0.1:0', '--target-port', '0'],
-            ['--bind', '127.0.0.1:0', '--target-port', '3002', '--relay', '127.0.0.1:0'],
-            ['--bind', '127.0.0.1:0', '--target-port', '3002', '--observer', 'example.invalid:10000'],
-            ['--bind', '127.0.0.1:0', '--bind', '127.0.0.1:0', '--target-port', '3002'],
+            ['--target-port', '3002'],
+            ['--target', '192.0.2.1:3002'],
+            ['--target', 'http://localhost:3002'],
+            ['--target', 'localhost:3002/path'],
+            ['--bind', '0.0.0.0:0', '--target', 'localhost:3002'],
+            ['--bind', '127.0.0.1:0', '--target', 'localhost:0'],
+            ['--bind', '127.0.0.1:0', '--target', 'localhost:3002', '--relay', '127.0.0.1:0'],
+            ['--bind', '127.0.0.1:0', '--target', 'localhost:3002', '--observer', 'example.invalid:10000'],
+            ['--bind', '127.0.0.1:0', '--bind', '127.0.0.1:0', '--target', 'localhost:3002'],
         ]:
             result = subprocess.run([binary, *args], stdin=slave, stdout=slave,
                                     stderr=subprocess.PIPE, timeout=10)
@@ -124,21 +128,26 @@ def wait_for_terminal(master, child, capture, predicate):
     check(predicate(), 'terminal expectation failed (output omitted)')
 
 
-def terminal_quit(binary, stop, actor=None, preparing=False, auto_bind=False):
+class IPv6HTTPServer(HTTPServer):
+    address_family = socket.AF_INET6
+
+
+def terminal_quit(binary, stop, actor=None, preparing=False, auto_bind=False, ipv6_target=False):
     master, slave = os.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reserve:
         reserve.bind(('127.0.0.1', 0))
         address = reserve.getsockname()
     capture = bytearray()
-    target = HTTPServer(('127.0.0.1', 0), Target) if actor else None
+    server = IPv6HTTPServer if ipv6_target else HTTPServer
+    target = server(('::1' if ipv6_target else '127.0.0.1', 0), Target) if actor else None
     target_port = target.server_port if target else 3002
     phone = None
     quiet = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if preparing else None
-    args = [binary, '--bind', f'127.0.0.1:{address[1]}', '--target-port', str(target_port)]
+    args = [binary, '--bind', f'127.0.0.1:{address[1]}', '--target', f'localhost:{target_port}']
     if auto_bind:
         check(preparing, 'automatic-bind fixture must use a loopback participant')
-        args = [binary, '--target-port', str(target_port)]
+        args = [binary, '--target', f'localhost:{target_port}']
     if quiet:
         quiet.bind(('127.0.0.1', 0))
         args += ['--observer', f'127.0.0.1:{quiet.getsockname()[1]}']
@@ -235,3 +244,4 @@ if __name__ == '__main__':
     terminal_quit(sys.argv[1], b'q', preparing=True, auto_bind=True)
     if len(sys.argv) == 5:
         terminal_quit(sys.argv[1], None, tuple(sys.argv[2:]))
+        terminal_quit(sys.argv[1], None, tuple(sys.argv[2:]), ipv6_target=True)

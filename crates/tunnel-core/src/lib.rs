@@ -6,6 +6,7 @@ pub mod peer_connect;
 pub mod peer_route;
 mod phone_ingress;
 mod pin;
+pub mod target;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Failure(pub &'static str);

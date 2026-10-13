@@ -9,7 +9,9 @@ async fn direct_silence_is_unavailable_and_releases_the_phone() {
         let (helper, mut offer) = Helper::prepare(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             &stop,
@@ -50,7 +52,9 @@ async fn production_observer_stop_and_drop_release_the_phone_without_authorizing
             let (helper, mut offer) = Helper::prepare(
                 HelperConfig {
                     bind: "127.0.0.1:0".parse().unwrap(),
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: None,
                 },
                 &helper_stop,

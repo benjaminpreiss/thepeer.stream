@@ -21,6 +21,10 @@ transport products, relay hosting and coordinated-punching designs have been rem
 - [Explicit address-family policy](saorsa-route-family-policy.md)
 - [Single-carrier Relay ownership and remote reservations](saorsa-route-relay.md)
 
+## Local HTTP targets
+
+- [Hostname targets and Host rewriting in other tunnel clients](localhost-targets.md)
+
 ## Admission and lifecycle
 
 - [Generic handshake ownership hooks](saorsa-handshake-hook-adapter.md)

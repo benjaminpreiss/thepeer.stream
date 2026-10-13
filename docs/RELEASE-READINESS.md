@@ -55,7 +55,7 @@ build/dependency artifacts were moved to `target/retired-local-artifacts/`, not 
 Host evidence after restructuring:
 
 - 90 core Rust tests and four desktop bind/argument tests.
-- Real helper terminal QR → scanner → Java/JNI → browser HTTP/body/CSP → Stop;
+- Real helper terminal QR → scanner → Java/JNI → browser HTTP/body/header checks → Stop;
   preparation cancellation, automatic bind and socket release included.
 - Scanner, 34 presentation and 23 handoff checks; five native receipt checks
   (including Node/Gradle input-list parity), two application-fixture checks and a

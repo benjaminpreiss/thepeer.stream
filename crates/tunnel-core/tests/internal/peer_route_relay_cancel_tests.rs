@@ -20,7 +20,7 @@ async fn stop_during_final_relay_dial_closes_phone_without_authorization_or_targ
             let phone_stop = CancellationToken::new();
             let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let (helper, mut offer) = Helper::prepare_with_relay(HelperConfig {
-                bind: "127.0.0.1:0".parse().unwrap(), target_port: target.local_addr().unwrap().port(), observer: None,
+                bind: "127.0.0.1:0".parse().unwrap(), target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(), observer: None,
             }, relay.local_addr().unwrap(), &helper_stop).await.unwrap();
             let computer = offer.direct_candidate();
             let contact = offer.relay_candidate().unwrap();
@@ -111,7 +111,7 @@ async fn stop_during_final_relay_dial_closes_phone_without_authorization_or_targ
                     .build().unwrap().get(format!("http://{browser}/relay-stop"))
                     .header("Host", authority).send().await.unwrap();
                 assert_eq!(response.status(), 200);
-                assert!(response.headers().contains_key("content-security-policy"));
+                assert!(!response.headers().contains_key("content-security-policy"));
                 assert_eq!(response.text().await.unwrap(), "control");
                 target_task.await.unwrap();
                 phone_stop.cancel();

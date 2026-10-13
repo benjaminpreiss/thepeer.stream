@@ -12,7 +12,7 @@ async fn paced_mixed_ingress_contention_preserves_queue_recovery_and_browser_htt
         let _stop_guard = stop.clone().drop_guard();
         let (helper, offer) = Helper::prepare_with_relay(HelperConfig {
             bind: "127.0.0.1:0".parse().unwrap(),
-            target_port: target.local_addr().unwrap().port(), observer: None,
+            target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(), observer: None,
         }, relay.local_addr().unwrap(), &stop).await.unwrap();
         let decoded = Offer::decode(&offer.encode().unwrap()).unwrap();
         drop(offer);
@@ -82,7 +82,7 @@ async fn paced_mixed_ingress_contention_preserves_queue_recovery_and_browser_htt
         let response = reqwest::Client::builder().no_proxy().timeout(Duration::from_secs(5)).build().unwrap()
             .get(format!("http://{address}/recovered")).header("Host", authority).send().await.unwrap();
         assert_eq!(response.status(), 200);
-        assert!(response.headers()["content-security-policy"].to_str().unwrap().contains("script-src 'self'"));
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(), "recovered");
         assert!(helper.progress().authorized);
         stop.cancel();

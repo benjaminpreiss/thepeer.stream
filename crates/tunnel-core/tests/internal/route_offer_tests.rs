@@ -19,7 +19,9 @@ async fn a_decoded_target_offer_authorizes_real_browser_http() {
         let (helper, offer) = Helper::prepare(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             &stop,
@@ -79,12 +81,7 @@ async fn a_decoded_target_offer_authorizes_real_browser_http() {
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        assert!(
-            response.headers()["content-security-policy"]
-                .to_str()
-                .unwrap()
-                .contains("script-src 'self'")
-        );
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(), "encoded");
         stop.cancel();
         while let Some(done) = tasks.join_next().await {
@@ -266,7 +263,9 @@ async fn a_changed_wire_grant_is_terminal_on_direct_and_relay_routes() {
             let (helper, mut offer) = Helper::prepare_with_relay(
                 HelperConfig {
                     bind: "127.0.0.1:0".parse().unwrap(),
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: seed.local_addr(),
                 },
                 seed.local_addr().unwrap(),

@@ -70,7 +70,9 @@ async fn blocked_setup_refuses_ingress(observed: bool, abandon: bool) {
         let (helper, mut offer) = Helper::prepare(
             HelperConfig {
                 bind: helper_bind,
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: observed.then_some(observer_addr),
             },
             &helper_stop,

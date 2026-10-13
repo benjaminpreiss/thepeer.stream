@@ -97,7 +97,7 @@ actual decoded-offer Direct HTTP, observer→Relay HTTP/Stop, observer Stop/drop
 admission/authorization races, forged-signature positive control and resource release.
 The old 157-test figure included retired designs and is not the current suite count.
 
-The real helper terminal QR→scanner→Java/JNI→Direct HTTP/body/CSP→Stop suite also
+The real helper terminal QR→scanner→Java/JNI→Direct HTTP/body/header checks→Stop suite also
 passed. Validation logs are local artifacts, not release inputs.
 
 The user separately confirmed Wi-Fi Direct, cellular Relay and Stop with the

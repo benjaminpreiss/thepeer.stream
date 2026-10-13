@@ -57,7 +57,9 @@ async fn explicit_phone_family_mismatch_is_terminal_before_transport() {
             let (helper, offer) = Helper::prepare(
                 HelperConfig {
                     bind: computer.parse().unwrap(),
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: None,
                 },
                 &stop,
@@ -135,7 +137,9 @@ async fn preparation_rejects_unrepresentable_bind_and_invalid_coordinator() {
             let result = Helper::prepare(
                 HelperConfig {
                     bind,
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: coordinator,
                 },
                 &CancellationToken::new(),
@@ -178,7 +182,9 @@ async fn unusable_participant_is_rejected_before_coordinator_traffic() {
             let preparing = Helper::prepare_with_relay(
                 HelperConfig {
                     bind,
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: Some(if wrong_coordinator {
                         "[::1]:9".parse().unwrap()
                     } else {
@@ -300,7 +306,7 @@ async fn withheld_observation_after_real_tls_is_terminal_and_cancellable() {
             let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let config = HelperConfig {
                 bind,
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(),
                 observer: (!mode.starts_with("relay-")).then_some(coordinator),
             };
             let stop = CancellationToken::new();
@@ -463,7 +469,9 @@ async fn observed_mapping_is_preserved_separately_from_bound_and_relay_candidate
             let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
             let config = HelperConfig {
                 bind: computer,
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: (!relay_only).then_some(participant),
             };
             let (helper, mut offer) = if relay_only {
@@ -542,7 +550,7 @@ async fn observed_mapping_is_preserved_separately_from_bound_and_relay_candidate
                 .await
                 .unwrap();
             assert_eq!(response.status(), 200);
-            assert!(response.headers().contains_key("content-security-policy"));
+            assert!(!response.headers().contains_key("content-security-policy"));
             assert_eq!(response.text().await.unwrap(), "observed");
             stop.cancel();
             while let Some(result) = tasks.join_next().await {

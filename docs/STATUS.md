@@ -38,7 +38,7 @@ request-count ceiling.
 ## Evidence and next gate
 
 The workspace has 90 passing core tests and four helper tests. The real terminal
-QR → scanner → Java/JNI → HTTP/body/CSP → Stop chain, scanner/state/handoff,
+QR → scanner → Java/JNI → HTTP/body/header checks → Stop chain, scanner/state/handoff,
 receipt and application-fixture checks pass. Android-package host compilation
 also succeeds without the core `host` feature. These are host checks, not an APK build.
 
@@ -63,7 +63,7 @@ signing secrets, run the first tagged workflow, review its notices and test the
 actual assets before publishing. See [release setup](RELEASING.md).
 
 - [Release gates and proposed commit boundary](RELEASE-READINESS.md)
-- [Helper build/run](HOST-HELPER.md)
+- [CLI build/run](CLI.md)
 - [Offer and route policy](ROUTING-OFFER.md)
 - [Physical test handoff](HUMAN-TESTING.md)
 

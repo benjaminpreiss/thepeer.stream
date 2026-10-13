@@ -74,7 +74,7 @@ public final class RoutingPhoneFixture {
             }
             String response = bytes.toString(StandardCharsets.US_ASCII);
             check(response.startsWith("HTTP/1.1 200") || response.startsWith("HTTP/1.0 200"));
-            check(response.toLowerCase(java.util.Locale.ROOT).contains("content-security-policy:"));
+            check(!response.toLowerCase(java.util.Locale.ROOT).contains("content-security-policy:"));
             check(response.contains("from-target"));
         }
         System.out.println("HTTP_OK");

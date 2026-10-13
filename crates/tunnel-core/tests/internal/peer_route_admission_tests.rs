@@ -34,7 +34,7 @@ async fn virtual_admission_bounds_unfinished_tls_and_stop_releases_owner() {
         let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let stop = CancellationToken::new();
         let (mut helper, offer) = Helper::prepare_with_relay(HelperConfig {
-            bind, target_port: target.local_addr().unwrap().port(), observer: None,
+            bind, target: format!("localhost:{}", target.local_addr().unwrap().port()).parse().unwrap(), observer: None,
         }, relay.local_addr().unwrap(), &stop).await.unwrap();
         let text = offer.encode().unwrap();
         let decoded = Offer::decode(&text).unwrap();
@@ -122,7 +122,9 @@ async fn expired_virtual_handshakes_release_capacity_for_relay_browser_http() {
         let (helper, mut offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             relay.local_addr().unwrap(),
@@ -228,12 +230,7 @@ async fn expired_virtual_handshakes_release_capacity_for_relay_browser_http() {
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        assert!(
-            response.headers()["content-security-policy"]
-                .to_str()
-                .unwrap()
-                .contains("script-src 'self'")
-        );
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(), "recovered");
         stop.cancel();
         while let Some(done) = serving.join_next().await {
@@ -402,7 +399,9 @@ async fn repeated_mixed_ingress_waves_remain_bounded_and_drop_releases_owner() {
         let (helper, offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind,
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             relay.local_addr().unwrap(),
@@ -481,7 +480,9 @@ async fn repeated_mixed_ingress_waves_preserve_offer_for_real_browser_http_and_s
         let (helper, offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             relay.local_addr().unwrap(),
@@ -562,12 +563,7 @@ async fn repeated_mixed_ingress_waves_preserve_offer_for_real_browser_http_and_s
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        assert!(
-            response.headers()["content-security-policy"]
-                .to_str()
-                .unwrap()
-                .contains("script-src 'self'")
-        );
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(), "recovered");
         assert!(helper.progress().authorized);
         stop.cancel();

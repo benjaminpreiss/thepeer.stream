@@ -6,7 +6,7 @@ same release or source revision.
 
 ## Published releases
 
-### Terminal helper
+### CLI
 
 Install the latest normal release:
 
@@ -72,7 +72,7 @@ wait for the complete draft before installing.
 Run the following in Bash or Zsh on a supported computer. Replace `v0.1.0` with
 the draft's tag. This downloads all five assets so every checksum can be checked,
 installs the CLI, and keeps the APK and license archives for review. It does not
-publish the draft or execute the downloaded helper.
+publish the draft or execute the downloaded CLI.
 
 ```sh
 (

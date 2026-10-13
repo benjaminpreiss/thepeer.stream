@@ -12,7 +12,9 @@ async fn helper_shutdown_releases_listener_without_cancelling_parent() {
         let (helper, _offer) = Helper::prepare(
             HelperConfig {
                 bind,
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             &parent,
@@ -41,7 +43,9 @@ async fn dropping_unpolled_browser_future_releases_phone_endpoint() {
         let (helper, offer) = Helper::prepare(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             &stop,
@@ -85,7 +89,7 @@ async fn invalid_helper_participants_are_rejected_before_observer_traffic() {
     let stop = CancellationToken::new();
     let config = HelperConfig {
         bind: "127.0.0.1:0".parse().unwrap(),
-        target_port: 3002,
+        target: "localhost:3002".parse().unwrap(),
         observer: Some(observer.local_addr().unwrap()),
     };
     let result = Helper::prepare_with_relay(config, "127.0.0.1:0".parse().unwrap(), &stop).await;
@@ -94,7 +98,7 @@ async fn invalid_helper_participants_are_rejected_before_observer_traffic() {
     let result = Helper::prepare(
         HelperConfig {
             bind: "127.0.0.1:0".parse().unwrap(),
-            target_port: 3002,
+            target: "localhost:3002".parse().unwrap(),
             observer: Some("[::1]:10000".parse().unwrap()),
         },
         &stop,

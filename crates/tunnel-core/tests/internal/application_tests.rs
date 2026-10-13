@@ -96,12 +96,7 @@ async fn real_browser_http_crosses_authenticated_quic_to_fixed_target() {
         .await
         .unwrap();
     assert_eq!(response.status(), 200);
-    assert!(
-        response.headers()["content-security-policy"]
-            .to_str()
-            .unwrap()
-            .contains("script-src 'self'")
-    );
+    assert!(!response.headers().contains_key("content-security-policy"));
     assert_eq!(response.text().await.unwrap(), "globalThis.ok=true;");
     stop.send(()).unwrap();
     assert!(gateway.await.unwrap().is_ok());
@@ -123,12 +118,15 @@ struct Running {
 }
 impl Running {
     async fn start(port: u16) -> Self {
-        let (inspector, token) = HttpInspector::new(port).unwrap();
+        Self::start_target(crate::target::PreparedTarget::loopback(port)).await
+    }
+    async fn start_target(target: crate::target::PreparedTarget) -> Self {
+        let (inspector, token) = HttpInspector::new(target.target.port()).unwrap();
         let fixture = Fixture::application_loopback().await.unwrap();
         let endpoint = fixture.backend.endpoint.clone();
         let backend = tokio::spawn(async move {
             let mut counts = Counts::default();
-            let result = serve_target(&endpoint, inspector, port, &mut counts).await;
+            let result = serve_target_inner(&endpoint, None, inspector, target, &mut counts).await;
             (result, counts)
         });
         let session = Session::open(
@@ -183,6 +181,299 @@ async fn header(socket: &mut TcpStream) -> String {
         assert!(buf.len() < 16384);
     }
     String::from_utf8(buf).unwrap()
+}
+
+#[tokio::test]
+async fn application_csp_is_preserved_without_injecting_a_tunnel_policy() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let running = Running::start(listener.local_addr().unwrap().port()).await;
+    let policies = [
+        "default-src 'self'; media-src https://video.example",
+        "script-src 'none'",
+    ];
+    let task = tokio::spawn(async move {
+        for headers in [
+            String::new(),
+            format!(
+                "Content-Security-Policy: {}\r\nContent-Security-Policy: {}\r\nContent-Security-Policy-Report-Only: default-src 'none'\r\n",
+                policies[0], policies[1]
+            ),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            header(&mut socket).await;
+            socket.write_all(format!("HTTP/1.1 200 OK\r\n{headers}Content-Length: 2\r\nConnection: close\r\n\r\nok").as_bytes()).await.unwrap();
+        }
+    });
+    let response = running
+        .request(reqwest::Method::GET, "/")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert!(!response.headers().contains_key("content-security-policy"));
+    assert!(
+        !response
+            .headers()
+            .contains_key("content-security-policy-report-only")
+    );
+    assert_eq!(response.text().await.unwrap(), "ok");
+    let response = running
+        .request(reqwest::Method::GET, "/")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    let actual: Vec<_> = response
+        .headers()
+        .get_all("content-security-policy")
+        .iter()
+        .map(|value| value.to_str().unwrap())
+        .collect();
+    assert_eq!(actual, policies);
+    assert_eq!(
+        response.headers()["content-security-policy-report-only"],
+        "default-src 'none'"
+    );
+    assert_eq!(response.text().await.unwrap(), "ok");
+    task.await.unwrap();
+    running.finish().await;
+}
+
+#[tokio::test]
+async fn custom_local_name_maps_host_without_inventing_origin_and_rewrites_only_its_redirects() {
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let target_name = format!("custom.test:{}", addr.port());
+    let target: crate::target::Target = target_name.parse().unwrap();
+    let prepared = target
+        .prepare_with(&CancellationToken::new(), async { Ok(vec![addr]) })
+        .await
+        .unwrap();
+    let running = Running::start_target(prepared).await;
+    let task = tokio::spawn(async move {
+        for location in [
+            format!("http://{target_name}?next=1#section"),
+            "next?return=http://example.invalid/".to_owned(),
+            format!("http://{target_name}.evil.invalid/path"),
+            format!("https://{target_name}/path"),
+            "//example.invalid/path".to_owned(),
+            "/\t/example.invalid/path".to_owned(),
+        ] {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let h = header(&mut socket).await.to_ascii_lowercase();
+            assert!(h.contains(&format!("\r\nhost: {target_name}\r\n")));
+            assert!(!h.contains("\r\norigin:"));
+            socket.write_all(format!("HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: {location}\r\nConnection: close\r\n\r\n").as_bytes()).await.unwrap();
+        }
+    });
+    for index in 0..6 {
+        let response = reqwest::Client::builder()
+            .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
+            .timeout(Duration::from_secs(5))
+            .build()
+            .unwrap()
+            .get(format!("http://{}/", running.addr))
+            .header("Host", &running.authority)
+            .send()
+            .await
+            .unwrap();
+        if index == 0 {
+            assert_eq!(response.status(), 302);
+            assert_eq!(
+                response.headers()["location"],
+                format!("http://{}/?next=1#section", running.authority)
+            );
+        } else if index == 1 {
+            assert_eq!(response.status(), 302);
+            assert_eq!(
+                response.headers()["location"],
+                "next?return=http://example.invalid/"
+            );
+        } else {
+            assert_eq!(response.status(), 502);
+        }
+    }
+    task.await.unwrap();
+    assert_eq!(running.finish().await.fetched, 6);
+}
+
+#[tokio::test]
+async fn legacy_or_invalid_authority_acknowledgements_fail_before_application_streams() {
+    for ack in [
+        serde_json::json!({"v":1,"type":"application-authorized","targetPort":4321}),
+        serde_json::json!({"v":2,"type":"application-authorized","targetAuthority":"https://localhost:4321"}),
+        serde_json::json!({"v":2,"type":"application-authorized","targetAuthority":"192.0.2.1:4321"}),
+        serde_json::json!({"v":2,"type":"application-authorized","targetAuthority":"LOCALHOST:4321"}),
+        serde_json::json!({"v":2,"type":"application-authorized","targetAuthority":"localhost:4321","extra":true}),
+    ] {
+        let mut fixture = Fixture::application_loopback().await.unwrap();
+        let endpoint = fixture.backend.endpoint.clone();
+        let backend = tokio::spawn(async move {
+            let connection = endpoint.accept().await.unwrap().await.unwrap();
+            let (mut send, mut recv) = connection.accept_bi().await.unwrap();
+            let auth = read_frame(&mut recv).await.unwrap().unwrap();
+            drop(auth);
+            write_frame(&mut send, &serde_json::to_vec(&ack).unwrap())
+                .await
+                .unwrap();
+            send.finish().unwrap();
+            assert!(
+                timeout(Duration::from_secs(2), connection.accept_bi())
+                    .await
+                    .unwrap()
+                    .is_err()
+            );
+        });
+        let result = Session::open(
+            "127.0.0.1:0".parse().unwrap(),
+            fixture.destination,
+            fixture.backend.public_pin,
+            &"00".repeat(32),
+        )
+        .await;
+        assert!(matches!(result, Err(Failure("application-auth-ack"))));
+        backend.await.unwrap();
+        fixture.shutdown().await;
+    }
+}
+
+#[tokio::test]
+async fn validated_browser_authority_is_mapped_and_spoofed_forwarding_headers_are_removed() {
+    let target = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = target.local_addr().unwrap().port();
+    let running = Running::start(port).await;
+    let task = tokio::spawn(async move {
+        let (mut socket, _) = target.accept().await.unwrap();
+        let h = header(&mut socket).await.to_ascii_lowercase();
+        assert!(h.contains(&format!("\r\nhost: localhost:{port}\r\n")));
+        assert!(h.contains(&format!("\r\norigin: http://localhost:{port}\r\n")));
+        assert!(!h.contains("forwarded"));
+        assert!(!h.contains("x-real-ip"));
+        socket
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+            .await
+            .unwrap();
+    });
+    let response = running
+        .request(reqwest::Method::POST, "/write")
+        .header("Forwarded", "host=attacker.invalid")
+        .header("X-Forwarded-Host", "attacker.invalid")
+        .header("X-Forwarded-For", "192.0.2.1")
+        .header("X-Forwarded-Proto", "https")
+        .header("X-Real-IP", "192.0.2.1")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 200);
+    assert_eq!(response.text().await.unwrap(), "ok");
+    task.await.unwrap();
+    running.finish().await;
+}
+
+#[tokio::test]
+async fn ipv6_only_localhost_target_and_redirect_cross_authenticated_quic() {
+    let target = TcpListener::bind("[::1]:0").await.unwrap();
+    let port = target.local_addr().unwrap().port();
+    // Ensure this fixture really has no IPv4 listener at the same port.
+    assert!(
+        TcpStream::connect((std::net::Ipv4Addr::LOCALHOST, port))
+            .await
+            .is_err()
+    );
+    let configured = format!("[::1]:{port}")
+        .parse::<crate::target::Target>()
+        .unwrap();
+    let prepared = configured.prepare(&CancellationToken::new()).await.unwrap();
+    let running = Running::start_target(prepared).await;
+    let target_task = tokio::spawn(async move {
+        for reply in [
+            format!(
+                "HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: http://[::1]:{port}/hello\r\nConnection: close\r\n\r\n"
+            ),
+            "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\nipv6".to_owned(),
+        ] {
+            let (mut socket, _) = target.accept().await.unwrap();
+            header(&mut socket).await;
+            socket.write_all(reply.as_bytes()).await.unwrap();
+        }
+    });
+    let response = running
+        .request(reqwest::Method::GET, "/")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), 302);
+    assert_eq!(
+        response.headers()["location"],
+        format!("http://{}/hello", running.authority)
+    );
+    assert_eq!(
+        running
+            .request(reqwest::Method::GET, "/hello")
+            .send()
+            .await
+            .unwrap()
+            .text()
+            .await
+            .unwrap(),
+        "ipv6"
+    );
+    target_task.await.unwrap();
+    assert_eq!(running.finish().await.fetched, 2);
+}
+
+#[tokio::test]
+async fn resolver_order_is_preserved_and_http_failure_is_not_replayed() {
+    for (respond, ipv6_first) in [(true, false), (false, false), (true, true), (false, true)] {
+        let ipv4 = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = ipv4.local_addr().unwrap().port();
+        let ipv6 = TcpListener::bind((std::net::Ipv6Addr::LOCALHOST, port))
+            .await
+            .unwrap();
+        let (first, second) = if ipv6_first {
+            (ipv6, ipv4)
+        } else {
+            (ipv4, ipv6)
+        };
+        let addresses = vec![first.local_addr().unwrap(), second.local_addr().unwrap()];
+        let target: crate::target::Target = format!("custom.test:{port}").parse().unwrap();
+        let prepared = target
+            .prepare_with(&CancellationToken::new(), async { Ok(addresses) })
+            .await
+            .unwrap();
+        let running = Running::start_target(prepared).await;
+        let task = tokio::spawn(async move {
+            let (mut socket, _) = timeout(Duration::from_secs(5), first.accept())
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(header(&mut socket).await.starts_with("POST /write "));
+            if respond {
+                socket
+                    .write_all(
+                        b"HTTP/1.1 418 Teapot\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                    .unwrap();
+            }
+            // Closing an established target without a response must not retry
+            // the potentially mutating request against another local service.
+        });
+        let response = running
+            .request(reqwest::Method::POST, "/write")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), if respond { 418 } else { 502 });
+        task.await.unwrap();
+        assert!(
+            timeout(Duration::from_millis(100), second.accept())
+                .await
+                .is_err()
+        );
+        assert_eq!(running.finish().await.fetched, 1);
+    }
 }
 
 #[tokio::test]
@@ -463,7 +754,8 @@ async fn target_status_host_only_cookies_and_local_redirects_survive_but_externa
     let task = tokio::spawn(async move {
         for response in [
             "HTTP/1.1 418 Teapot\r\nContent-Length: 0\r\nSet-Cookie: a=public; Path=/; SameSite=Strict\r\nSet-Cookie: b=fixture; HttpOnly; Path=/; SameSite=Strict\r\n\r\n".to_owned(),
-            format!("HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: http://127.0.0.1:{port}/two?q=1\r\n\r\n"),
+            format!("HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: http://localhost:{port}/two?q=1\r\n\r\n"),
+            format!("HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: http://[::1]:{}/\r\n\r\n", if port == 65535 { 1 } else { port + 1 }),
             "HTTP/1.1 302 Found\r\nContent-Length: 0\r\nLocation: https://example.invalid/\r\n\r\n".to_owned(),
             "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nSet-Cookie: a=public; Domain=localhost\r\n\r\n".to_owned(),
         ] {
@@ -488,7 +780,7 @@ async fn target_status_host_only_cookies_and_local_redirects_survive_but_externa
         response.headers()["location"],
         format!("http://{}/two?q=1", running.authority)
     );
-    for path in ["/external", "/domain-cookie"] {
+    for path in ["/wrong-ipv6-port", "/external", "/domain-cookie"] {
         assert_eq!(
             running
                 .request(reqwest::Method::GET, path)
@@ -500,7 +792,7 @@ async fn target_status_host_only_cookies_and_local_redirects_survive_but_externa
         );
     }
     task.await.unwrap();
-    assert_eq!(running.finish().await.fetched, 4);
+    assert_eq!(running.finish().await.fetched, 5);
 }
 
 #[tokio::test]

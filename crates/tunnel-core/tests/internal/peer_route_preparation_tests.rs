@@ -37,7 +37,9 @@ async fn completed_client_handshakes(hold_bootstrap: bool, abandon: bool) -> usi
         let stop = CancellationToken::new();
         let config = HelperConfig {
             bind,
-            target_port: target.local_addr().unwrap().port(),
+            target: format!("localhost:{}", target.local_addr().unwrap().port())
+                .parse()
+                .unwrap(),
             observer: hold_bootstrap.then(|| silent.local_addr().unwrap()),
         };
         let mut ready = None;

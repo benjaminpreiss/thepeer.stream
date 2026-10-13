@@ -15,8 +15,8 @@ operation has been performed by the agent during this cleanup.
 
 ## Current host checkpoint
 
-The shared core and separate desktop helper have 89 + 4 passing Rust tests.
-The real helper terminal QR → scanner → Java/JNI → browser HTTP/body/CSP → Stop
+The shared core and separate CLI have 89 + 4 passing Rust tests.
+The real helper terminal QR → scanner → Java/JNI → browser HTTP/body/header checks → Stop
 suite passes, including automatic bind and socket release. These are local host
 fixtures, not a physical camera, cellular benchmark or public NAT guarantee.
 
@@ -41,7 +41,7 @@ translation and a 195-byte `wpa2:` text bound. The foreground owner moved to
    **Run app** on the arm64 phone. Do not use Apply Changes. Check camera permission
    requires another Connect, and cancelling/backgrounding scanning does not connect.
 
-3. Build the [desktop helper](HOST-HELPER.md), start the disposable application on
+3. Build the [CLI](CLI.md), start the disposable application on
    port 3002, and start a fresh helper/QR. Try same-Wi-Fi Direct first.
 
 4. For Relay, agree on the participant **before traffic**. The previously approved

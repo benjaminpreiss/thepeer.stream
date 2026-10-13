@@ -36,7 +36,7 @@ mod runtime;
 #[cfg(feature = "host")]
 pub struct HelperConfig {
     pub bind: SocketAddr,
-    pub target_port: u16,
+    pub target: crate::target::Target,
     /// Explicit participant. Bootstrap and acquisition of its ordinary-UDP
     /// observation are required; failure is terminal, not silently skipped.
     pub observer: Option<SocketAddr>,
@@ -374,8 +374,10 @@ impl Helper {
         if stop.is_cancelled() {
             return Err(Failure("peer-cancelled"));
         }
+        // Resolve and freeze the local target before endpoints, participants or QR.
+        let target = config.target.prepare(stop).await?;
         let (inspector, grant) =
-            HttpInspector::new(config.target_port).map_err(|_| Failure("route-target"))?;
+            HttpInspector::new(target.target.port()).map_err(|_| Failure("route-target"))?;
         let grant = Zeroizing::new(grant);
         // Reject unsolicited ingress and coordination instructions from the first
         // accept-loop poll, including construction and bootstrap. Our explicit
@@ -450,7 +452,7 @@ impl Helper {
                     if !selected.0.as_ref().unwrap().is_virtual_socket() {
                         abort_allocation(&endpoint.endpoint, &mut allocation).await?;
                     }
-                    application::serve_peer(selected.0.take().unwrap(), inspector, config.target_port, &mut counts).await
+                    application::serve_prepared_peer(selected.0.take().unwrap(), inspector, target, &mut counts).await
                 } => result,
             };
             rx.close();

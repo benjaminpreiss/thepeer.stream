@@ -38,7 +38,9 @@ async fn relay_http(production: bool) {
         let (helper, mut offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: relay.local_addr(),
             },
             relay.local_addr().unwrap(),
@@ -108,12 +110,7 @@ async fn relay_http(production: bool) {
             .await
             .unwrap();
         assert_eq!(response.status(), 200);
-        assert!(
-            response.headers()["content-security-policy"]
-                .to_str()
-                .unwrap()
-                .contains("script-src 'self'")
-        );
+        assert!(!response.headers().contains_key("content-security-policy"));
         assert_eq!(response.text().await.unwrap(), "relayed");
         stop.cancel();
         while let Some(done) = tasks.join_next().await {
@@ -169,7 +166,9 @@ async fn unauthorized_virtual_winner_cannot_reach_target_or_survive_stop_and_dro
             let (mut helper, offer) = Helper::prepare_with_relay(
                 HelperConfig {
                     bind,
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: None,
                 },
                 relay.local_addr().unwrap(),
@@ -326,7 +325,9 @@ async fn selected_cross_family_observer_or_relay_is_terminal() {
             let (helper, mut offer) = Helper::prepare_with_relay(
                 HelperConfig {
                     bind: "127.0.0.1:0".parse().unwrap(),
-                    target_port: target.local_addr().unwrap().port(),
+                    target: format!("localhost:{}", target.local_addr().unwrap().port())
+                        .parse()
+                        .unwrap(),
                     observer: coordinated.then_some(participant_addr),
                 },
                 participant_addr,
@@ -410,7 +411,9 @@ async fn malformed_observer_is_terminal_before_a_healthy_direct_route() {
         let (helper, mut offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: relay.local_addr(),
             },
             relay.local_addr().unwrap(),
@@ -493,7 +496,9 @@ async fn stopping_a_prepared_helper_withdraws_the_relay_contact_without_target_a
         let (helper, offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             relay.local_addr().unwrap(),
@@ -544,7 +549,9 @@ async fn direct_winner_withdraws_unused_relay_but_keeps_browser_http_alive() {
         let (helper, offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             relay.local_addr().unwrap(),
@@ -643,7 +650,9 @@ async fn wrong_direct_pin_is_terminal_without_authorizing_either_target() {
         let (helper, mut offer) = Helper::prepare_with_relay(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             relay.local_addr().unwrap(),
@@ -654,7 +663,9 @@ async fn wrong_direct_pin_is_terminal_without_authorizing_either_target() {
         let (wrong_helper, wrong_offer) = Helper::prepare(
             HelperConfig {
                 bind: "127.0.0.1:0".parse().unwrap(),
-                target_port: wrong_target.local_addr().unwrap().port(),
+                target: format!("localhost:{}", wrong_target.local_addr().unwrap().port())
+                    .parse()
+                    .unwrap(),
                 observer: None,
             },
             &stop,

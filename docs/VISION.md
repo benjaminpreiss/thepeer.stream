@@ -2,7 +2,7 @@
 
 The MVP exposes one explicitly configured computer-localhost web application to a
 normal phone browser. An installed Android app—not browser JavaScript—owns the
-Saorsa connection and a fresh local browser origin. The desktop helper owns the
+Saorsa connection and a fresh local browser origin. The CLI owns the
 fixed target and displays a one-shot pairing QR.
 
 The user explicitly connects, scans a trusted helper and can Stop access at any
