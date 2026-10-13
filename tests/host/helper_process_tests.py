@@ -96,6 +96,34 @@ class Target(BaseHTTPRequestHandler):
         pass
 
 
+def wait_for_terminal(master, child, capture, predicate):
+    def read_ready():
+        try:
+            chunk = os.read(master, 65536)
+        except OSError as error:
+            if error.errno == errno.EIO:  # Linux PTY EOF after the slave closes.
+                return False
+            raise
+        capture.extend(chunk)
+        check(len(capture) < 2_000_000, 'unbounded terminal output (omitted)')
+        return bool(chunk)
+
+    deadline = time.monotonic() + 25
+    while not predicate() and time.monotonic() < deadline:
+        if select.select([master], [], [], 0.05)[0] and not read_ready():
+            # The slave can close just before the process becomes waitable.
+            time.sleep(0.01)
+        if child.poll() is not None:
+            break
+    if child.poll() is not None:
+        # Exit does not mean the PTY has been drained. In particular, phone.wait()
+        # can return after the helper exits but before we read its restoration.
+        while select.select([master], [], [], 0)[0]:
+            if not read_ready():
+                break
+    check(predicate(), 'terminal expectation failed (output omitted)')
+
+
 def terminal_quit(binary, stop, actor=None, preparing=False, auto_bind=False):
     master, slave = os.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', 24, 80, 0, 0))
@@ -123,18 +151,7 @@ def terminal_quit(binary, stop, actor=None, preparing=False, auto_bind=False):
         threading.Thread(target=target.serve_forever, daemon=True).start()
 
     def until(predicate):
-        deadline = time.monotonic() + 25
-        while not predicate() and time.monotonic() < deadline:
-            if select.select([master], [], [], 0.05)[0]:
-                try:
-                    capture.extend(os.read(master, 65536))
-                except OSError as error:
-                    if error.errno != errno.EIO:
-                        raise
-            check(len(capture) < 2_000_000, 'unbounded terminal output (omitted)')
-            if child.poll() is not None:
-                break
-        check(predicate(), 'terminal expectation failed (output omitted)')
+        wait_for_terminal(master, child, capture, predicate)
 
     try:
         if quiet:
