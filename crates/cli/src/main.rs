@@ -1,22 +1,27 @@
-//! Target-only host command. Capabilities never leave the interactive QR surface.
+//! Interactive host and browser-client commands. Capabilities stay on live terminals.
 use qrcode::{QrCode, render::unicode};
+use rand::RngCore;
 use ratatui::crossterm::{
     cursor,
-    event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
+    event::{
+        self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyCode, KeyEventKind,
+        KeyModifiers,
+    },
     execute,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
     terminal::{self, Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use std::{
-    io::{self, IsTerminal},
+    io::{self, IsTerminal, Write},
     net::{SocketAddr, UdpSocket},
     process::ExitCode,
     time::Duration,
 };
+use tokio::{net::TcpListener, signal};
 use tokio_util::sync::CancellationToken;
 use tunnel_core::{
     Failure,
-    peer_route::{Helper, HelperConfig},
+    peer_route::{self, Helper, HelperConfig, Offer},
 };
 use zeroize::Zeroizing;
 
@@ -26,7 +31,7 @@ type Result<T> = std::result::Result<T, Failure>;
 #[path = "../tests/internal/bind_tests.rs"]
 mod bind_tests;
 
-const USAGE: &str = "Usage: thepeer --target HOST:PORT [--bind IP:PORT] [--observer IP:PORT] [--relay IP:PORT]\nAutomatically select the local source address toward the participant (otherwise an IPv4 routing hint).\nOptional --bind overrides selection with an explicit unicast IP (port 0 allowed). Plain HTTP target: hostname:PORT or [IPv6]:PORT. Resolve once; every address must be loopback. No URLs or HTTPS.\nParticipant options perform network bootstrap; no relay is operated by this helper.\nInteractive terminal required. Use the matching thepeer Android app.\nThe phone tries eligible Direct candidates then Relay; no coordinated punching.";
+const USAGE: &str = "Usage: thepeer share HOST:PORT [--bind IP:PORT] [--observer IP:PORT] [--relay IP:PORT]\n       thepeer connect\nShare one localhost HTTP application with a terminal or the matching Android app.\nConnect prompts privately for the one-shot connection string, then prints a local browser URL.\nAutomatically select a local source address toward the participant; --bind overrides this on the host.\nPlain HTTP target: hostname:PORT or [IPv6]:PORT. Resolve once; every address must be loopback.\nParticipant options perform network bootstrap; no relay is operated by this CLI.\nInteractive terminal required; no automatic tunnel reconnection or coordinated punching.";
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> ExitCode {
@@ -47,18 +52,18 @@ struct Arguments {
 }
 
 fn arguments(args: &[String]) -> Result<Arguments> {
-    let (mut bind, mut target, mut observer, mut relay) = (None, None, None, None);
-    if args.len() > 8 || args.len() % 2 != 0 {
+    let (mut bind, mut observer, mut relay) = (None, None, None);
+    let Some(first) = args.first() else {
+        return Err(Failure("helper-arguments"));
+    };
+    let target = first.parse().map_err(|_| Failure("helper-arguments"))?;
+    let flags = &args[1..];
+    if flags.len() > 6 || flags.len() % 2 != 0 {
         return Err(Failure("helper-arguments"));
     }
-    for pair in args.chunks_exact(2) {
+    for pair in flags.chunks_exact(2) {
         match pair[0].as_str() {
             "--bind" if bind.is_none() => bind = Some(address(&pair[1], true)?),
-            "--target" if target.is_none() => {
-                let parsed: tunnel_core::target::Target =
-                    pair[1].parse().map_err(|_| Failure("helper-arguments"))?;
-                target = Some(parsed);
-            }
             "--observer" if observer.is_none() => observer = Some(address(&pair[1], false)?),
             "--relay" if relay.is_none() => relay = Some(address(&pair[1], false)?),
             _ => return Err(Failure("helper-arguments")),
@@ -66,7 +71,7 @@ fn arguments(args: &[String]) -> Result<Arguments> {
     }
     Ok(Arguments {
         bind,
-        target: target.ok_or(Failure("helper-arguments"))?,
+        target,
         observer,
         relay,
     })
@@ -142,7 +147,111 @@ async fn run() -> Result<()> {
     if !io::stdin().is_terminal() || !io::stdout().is_terminal() {
         return Err(Failure("helper-terminal"));
     }
-    let (config, relay) = arguments(&args)?.resolve()?;
+    match args.as_slice() {
+        [command] if command == "connect" => connect().await,
+        [command, rest @ ..] if command == "share" => share(rest).await,
+        _ => Err(Failure("helper-arguments")),
+    }
+}
+
+// Hidden, bounded interactive input: the live grant never appears in argv or history.
+fn prompt_offer() -> Result<Offer> {
+    struct PromptRestore;
+    impl Drop for PromptRestore {
+        fn drop(&mut self) {
+            let _ = execute!(io::stdout(), DisableBracketedPaste);
+            let _ = terminal::disable_raw_mode();
+            let _ = writeln!(io::stdout());
+        }
+    }
+    terminal::enable_raw_mode().map_err(|_| Failure("connect-terminal"))?;
+    let _restore = PromptRestore;
+    execute!(io::stdout(), EnableBracketedPaste).map_err(|_| Failure("connect-terminal"))?;
+    print!("Paste connection string (hidden), then press Enter: ");
+    io::stdout()
+        .flush()
+        .map_err(|_| Failure("connect-terminal"))?;
+    let mut text = Zeroizing::new(String::new());
+    loop {
+        match event::read().map_err(|_| Failure("connect-terminal"))? {
+            Event::Paste(paste) => {
+                let paste = Zeroizing::new(paste);
+                // SSH terminal selection can contain display line wraps.
+                let nonspace = paste.bytes().filter(|b| !b.is_ascii_whitespace()).count();
+                if nonspace + text.len() > Offer::MAX_ENCODED_LEN {
+                    return Err(Failure("route-offer-format"));
+                }
+                text.extend(paste.chars().filter(|c| !c.is_ascii_whitespace()));
+            }
+            Event::Key(key) if key.kind == KeyEventKind::Press => match key.code {
+                KeyCode::Enter => return Offer::decode(&text),
+                KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    return Err(Failure("peer-cancelled"));
+                }
+                KeyCode::Char(c) if c.is_ascii() && !c.is_ascii_whitespace() => {
+                    if text.len() >= Offer::MAX_ENCODED_LEN {
+                        return Err(Failure("route-offer-format"));
+                    }
+                    text.push(c);
+                }
+                KeyCode::Backspace => {
+                    text.pop();
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+async fn connect() -> Result<()> {
+    let offer = prompt_offer()?;
+    let destination = offer.relay_candidate().unwrap_or(offer.direct_candidate());
+    let bind = discover_bind(destination)?;
+    let stop = CancellationToken::new();
+    // Reserve the URL before dialing; never serve it until authenticated.
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .map_err(|_| Failure("application-loopback-bind"))?;
+    let port = listener
+        .local_addr()
+        .map_err(|_| Failure("application-loopback-address"))?
+        .port();
+    if port == 18787 {
+        return Err(Failure("application-origin-collision"));
+    }
+    let mut nonce = [0u8; 16];
+    rand::rngs::OsRng.fill_bytes(&mut nonce);
+    let hostname = format!("thepeer-{}.localhost", hex::encode(nonce));
+    let connected = tokio::select! {
+        result = peer_route::connect(offer, bind, &stop) => result?,
+        _ = stop_signal() => { stop.cancel(); return Ok(()); }
+    };
+    println!(
+        "Connected ({:?}). Open http://{hostname}:{port} — Ctrl-C to disconnect.",
+        connected.route()
+    );
+    let serving = connected.serve(listener, hostname, &stop);
+    tokio::pin!(serving);
+    tokio::select! {
+        result = &mut serving => result,
+        _ = stop_signal() => { stop.cancel(); serving.await },
+    }
+}
+
+async fn stop_signal() {
+    #[cfg(unix)]
+    {
+        if let Ok(mut term) = signal::unix::signal(signal::unix::SignalKind::terminate()) {
+            tokio::select! { _ = signal::ctrl_c() => {}, _ = term.recv() => {} }
+            return;
+        }
+    }
+    let _ = signal::ctrl_c().await;
+}
+
+async fn share(args: &[String]) -> Result<()> {
+    let (config, relay) = arguments(args)?.resolve()?;
     let mut ui = Surface::enter(config.target.to_string())?;
     let stop = CancellationToken::new();
     let preparing = async {
@@ -166,14 +275,13 @@ async fn run() -> Result<()> {
         }
     };
     let (mut helper, offer) = ready?;
-    // Drop plaintext immediately after building the ephemeral QR image.
-    let encoded = offer.encode();
-    let presentation = encoded.and_then(|text| {
+    let presentation = offer.encode().and_then(|text| {
         let code = QrCode::new(text.as_bytes()).map_err(|_| Failure("helper-qr"))?;
         ui.qr = Some(Zeroizing::new(
             code.render::<unicode::Dense1x2>().quiet_zone(true).build(),
         ));
-        ui.status = "Scan with Android 0.6-direct-relay-preview";
+        ui.offer = Some(text);
+        ui.status = "Copy the connection string to your computer; run thepeer connect";
         Ok(())
     });
     drop(offer);
@@ -189,6 +297,7 @@ async fn run() -> Result<()> {
                         let progress = helper.progress();
                         if progress.admitted > 0 {
                             ui.qr = None;
+                            ui.offer = None;
                             ui.status = if progress.authorized { "Connected" } else { "Authorizing selected peer" };
                         }
                     }
@@ -213,9 +322,11 @@ impl Drop for Restore {
 struct Surface {
     target: String,
     qr: Option<Zeroizing<String>>,
+    offer: Option<Zeroizing<String>>,
     status: &'static str,
     hidden: bool,
-    previous: Option<((u16, u16), bool, &'static str)>,
+    show_qr: bool,
+    previous: Option<((u16, u16), bool, bool, &'static str)>,
     #[cfg(unix)]
     terminate: tokio::signal::unix::Signal,
     _restore: Restore,
@@ -232,8 +343,10 @@ impl Surface {
         Ok(Self {
             target,
             qr: None,
+            offer: None,
             status: "Preparing (q to cancel)",
             hidden: false,
+            show_qr: false,
             previous: None,
             #[cfg(unix)]
             terminate,
@@ -242,7 +355,7 @@ impl Surface {
     }
     fn draw(&mut self) -> Result<()> {
         let size = terminal::size().map_err(|_| Failure("helper-terminal"))?;
-        let view = (size, self.hidden, self.status);
+        let view = (size, self.hidden, self.show_qr, self.status);
         if self.previous == Some(view) {
             return Ok(());
         }
@@ -253,13 +366,41 @@ impl Surface {
             ResetColor,
             Clear(ClearType::All),
             cursor::MoveTo(0, 0),
-            Print("thepeer | q / Esc / Ctrl-C: Stop | h: Hide QR"),
+            Print("thepeer | q / Esc / Ctrl-C: Stop | h: Hide | t: Text | r: QR"),
             cursor::MoveTo(0, 1),
             Print(self.status),
             cursor::MoveTo(0, 2),
             Print(format!("Fixed HTTP target: {}", self.target))
         )
         .map_err(|_| Failure("helper-terminal"))?;
+        if !self.show_qr {
+            if let Some(offer) = &self.offer {
+                // Split only for display: paste strips whitespace before decoding.
+                let width = usize::from(size.0).max(1);
+                if self.hidden || usize::from(size.1) < 3 + offer.len().div_ceil(width) {
+                    let message = if self.hidden {
+                        "Connection string hidden"
+                    } else {
+                        "Connection string hidden: terminal too small"
+                    };
+                    execute!(out, cursor::MoveTo(0, 3), Print(message))
+                        .map_err(|_| Failure("helper-terminal"))?;
+                } else {
+                    for (row, chunk) in offer.as_bytes().chunks(width).enumerate() {
+                        execute!(
+                            out,
+                            cursor::MoveTo(0, row as u16 + 3),
+                            Print(
+                                std::str::from_utf8(chunk)
+                                    .map_err(|_| Failure("helper-terminal"))?
+                            )
+                        )
+                        .map_err(|_| Failure("helper-terminal"))?;
+                    }
+                }
+            }
+            return Ok(());
+        }
         if let Some(qr) = &self.qr {
             let width = qr
                 .lines()
@@ -314,6 +455,8 @@ impl Surface {
                                 KeyCode::Esc | KeyCode::Char('q') => return Ok(()),
                                 KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => return Ok(()),
                                 KeyCode::Char('h') => self.hidden = !self.hidden,
+                                KeyCode::Char('r') => self.show_qr = true,
+                                KeyCode::Char('t') => self.show_qr = false,
                                 _ => {},
                             }
                         }

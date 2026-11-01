@@ -12,7 +12,7 @@ With Rust, the pinned dependencies and native build prerequisites already cached
 bash scripts/build-helper.sh
 node tests/fixtures/application-app.mjs 3002
 # In another interactive terminal:
-./target/build/debug/thepeer --target localhost:3002
+./target/build/debug/thepeer share localhost:3002
 ```
 
 The build is locked/offline and applies the exact reviewed transport patch stack.
@@ -23,7 +23,7 @@ is started by the build script. `CARGO_TARGET_DIR` can reuse an existing cache.
 To prepare Relay with the previously approved participant:
 
 ```sh
-./target/build/debug/thepeer --target localhost:3002 --relay 207.148.94.42:10000
+./target/build/debug/thepeer share localhost:3002 --relay 207.148.94.42:10000
 ```
 
 That command contacts the selected public service. It does **not** operate a relay.
@@ -41,7 +41,7 @@ binds the selected IP and obtains its own observation when configured.
 VPNs and routing policy can select the wrong interface. Override explicitly:
 
 ```sh
-./target/build/debug/thepeer --bind 192.168.2.120:0 --target localhost:3002
+./target/build/debug/thepeer share localhost:3002 --bind 192.168.2.120:0
 ```
 
 No wildcard/loopback fallback or public-IP service is used. Mixed participant
@@ -50,7 +50,7 @@ only; coordinated punching is not supported.
 
 ## Local HTTP target
 
-`--target` accepts `hostname:PORT`, loopback IPv4 such as `127.0.0.1:PORT`, or
+`share` accepts `hostname:PORT`, loopback IPv4 such as `127.0.0.1:PORT`, or
 bracketed loopback IPv6 such as `[::1]:PORT`. The port must be nonzero. URLs,
 credentials, paths, scoped IPv6 and HTTPS are unsupported. DNS names must be
 ASCII, without a trailing dot.
@@ -71,16 +71,20 @@ address family. See the [startup resolution diagram](ARCHITECTURE.md#target-reso
 
 ## Pairing and ownership
 
-Use the matching thepeer Android app from the same release or source revision.
+Use the matching thepeer Android app or `thepeer connect` from the same release or source revision.
 The sole offer is `wpa2:`. It retains the CLI's bound address, its ordinary
 observation, and a separately allocated relay contact. See [wire policy](ROUTING-OFFER.md).
 Old coordination-bearing offers (flag 1) are rejected, not translated.
 
-The terminal displays a fresh capability-bearing QR, never a plaintext fallback.
-Redirected output is refused. Scan only with the app's scanner, not Brave. Never
-save, log, screenshot or copy the QR. `q` or Ctrl-C removes the surface and stops
-the CLI. A selected TLS winner consumes the one-shot offer; start a fresh CLI session
-for another Connect. No grant file or automatic reconnect exists.
+The sharing terminal displays a fresh one-shot capability-bearing connection string.
+Run `thepeer connect` in another interactive terminal and paste it at the hidden
+prompt; the CLI prints a loopback browser URL only after authentication. Do not put
+the string in argv, logs, screenshots or files. Select it only over a trusted channel
+(such as your SSH terminal). Press `r` to display the Android QR and `t` for the
+connection string. Redirected output is refused; scan the QR only with the app's
+scanner, not Brave. `q` or Ctrl-C removes the surface and stops the CLI. A selected TLS winner consumes the one-shot offer; start a fresh sharing CLI session
+for another Connect. A dev-server restart is not another Connect: the same healthy
+tunnel and local browser URL remain available for new requests. No grant file or automatic reconnect exists.
 
 The phone authenticates the intended computer on the **retained TLS connection**
 before sending the grant. Observer connections never receive it. Only classified
@@ -109,7 +113,7 @@ headers and redirects to bridge that difference.
   for this session, using its Host, Origin and browser fetch headers. Rewriting
   headers never turns a rejected request into an accepted one.
 - **Use the app's address.** The Host header becomes the hostname and port you
-  configured with `--target`. An accepted Origin becomes `http://TARGET`. If no
+  configured with `share`. An accepted Origin becomes `http://TARGET`. If no
   Origin was sent, none is added; a foreign or `null` Origin is rejected.
 - **Discard claimed proxy information.** Browser-supplied `Forwarded`,
   `X-Forwarded-*` and `X-Real-IP` headers are removed.

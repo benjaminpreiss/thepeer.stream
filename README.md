@@ -60,12 +60,12 @@ You can also install a draft release or build from source; see the
 
 ### Start
 
-**1. Run the CLI in your computer’s terminal.** It displays a QR code for your local web application.
+**1. Run the CLI in your computer’s terminal.** Press `r` to display the QR code for your local web application.
 
 For a web application already running on your computer at `http://127.0.0.1:3000`:
 
 ```sh
-thepeer --target localhost:3000
+thepeer share localhost:3000
 ```
 
 Replace `3000` with your application's port.
@@ -77,6 +77,19 @@ relay you have permission to use; no relay is configured by default.
 **3. The phone app attempts a direct connection first**, falling back to relay if direct is unavailable.
 
 **4. Your web application opens in the phone’s browser.**
+
+### Connect from another computer's terminal
+
+While SSHed into the computer hosting the app, run `thepeer share localhost:3000`.
+If Direct cannot reach the server, configure an authorized relay with `--relay IP:PORT`.
+The CLI displays a one-shot connection string. On your own computer, run
+`thepeer connect` and paste the string at its hidden prompt (not in a shell command).
+Open the printed `http://thepeer-….localhost:PORT` URL in your browser. The local
+listener binds only to loopback. Both CLI processes stay open until stopped; you
+can restart the dev server without re-pairing, although active requests or
+WebSockets may disconnect during its restart. A network/tunnel disconnect still
+ends the session. Press Ctrl-C to stop either CLI. For Android scanning, press
+`r` in the sharing terminal to show the QR; `t` shows the text again.
 
 ### Stop
 
@@ -111,7 +124,10 @@ tests/fixtures/          Disposable localhost application for host/phone checks
 - [Offer and routing policy](docs/ROUTING-OFFER.md)
 - [Release readiness](docs/RELEASE-READINESS.md)
 
-**Keep live QRs private.** No screenshots, clipboard, files or logs. Use only the
+**Keep live offers private.** Transfer terminal connection strings only through a
+trusted channel such as your SSH terminal; do not put them in shell arguments,
+files, screenshots or logs. The terminal string is a live capability. For phone QRs,
+use only the
 in-app scanner, not Brave's generic QR scanner, which can send payloads to search.
 
 ## License

@@ -25,7 +25,7 @@ def redirected(binary):
     master, slave = os.openpty()
     try:
         for stdin in (subprocess.DEVNULL, slave):
-            result = subprocess.run([binary, '--bind', '127.0.0.1:0', '--target', 'localhost:3002'],
+            result = subprocess.run([binary, 'share', 'localhost:3002', '--bind', '127.0.0.1:0'],
                                     stdin=stdin, stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE, timeout=10)
             check(result.returncode != 0, 'redirected helper unexpectedly succeeded')
@@ -43,14 +43,15 @@ def rejected_arguments(binary):
         for args in [
             ['--qr-test'], ['--masque-app', '127.0.0.1', '127.0.0.2', '3002'],
             ['--target-port', '3002'],
-            ['--target', '192.0.2.1:3002'],
-            ['--target', 'http://localhost:3002'],
-            ['--target', 'localhost:3002/path'],
-            ['--bind', '0.0.0.0:0', '--target', 'localhost:3002'],
-            ['--bind', '127.0.0.1:0', '--target', 'localhost:0'],
-            ['--bind', '127.0.0.1:0', '--target', 'localhost:3002', '--relay', '127.0.0.1:0'],
-            ['--bind', '127.0.0.1:0', '--target', 'localhost:3002', '--observer', 'example.invalid:10000'],
-            ['--bind', '127.0.0.1:0', '--bind', '127.0.0.1:0', '--target', 'localhost:3002'],
+            ['--target', 'localhost:3002'], ['connect', 'wpa2:secret'],
+            ['share', '192.0.2.1:3002'],
+            ['share', 'http://localhost:3002'],
+            ['share', 'localhost:3002/path'],
+            ['share', 'localhost:3002', '--bind', '0.0.0.0:0'],
+            ['share', 'localhost:0', '--bind', '127.0.0.1:0'],
+            ['share', 'localhost:3002', '--bind', '127.0.0.1:0', '--relay', '127.0.0.1:0'],
+            ['share', 'localhost:3002', '--observer', 'example.invalid:10000', '--bind', '127.0.0.1:0'],
+            ['share', 'localhost:3002', '--bind', '127.0.0.1:0', '--bind', '127.0.0.1:0'],
         ]:
             result = subprocess.run([binary, *args], stdin=slave, stdout=slave,
                                     stderr=subprocess.PIPE, timeout=10)
@@ -144,10 +145,10 @@ def terminal_quit(binary, stop, actor=None, preparing=False, auto_bind=False, ip
     target_port = target.server_port if target else 3002
     phone = None
     quiet = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) if preparing else None
-    args = [binary, '--bind', f'127.0.0.1:{address[1]}', '--target', f'localhost:{target_port}']
+    args = [binary, 'share', f'localhost:{target_port}', '--bind', f'127.0.0.1:{address[1]}']
     if auto_bind:
         check(preparing, 'automatic-bind fixture must use a loopback participant')
-        args = [binary, '--target', f'localhost:{target_port}']
+        args = [binary, 'share', f'localhost:{target_port}']
     if quiet:
         quiet.bind(('127.0.0.1', 0))
         args += ['--observer', f'127.0.0.1:{quiet.getsockname()[1]}']
@@ -171,11 +172,13 @@ def terminal_quit(binary, stop, actor=None, preparing=False, auto_bind=False, ip
                 check(source[0] == '127.0.0.1', 'automatic bind selected wrong interface')
                 address = source  # Real transport port, not the discarded lookup socket.
         else:
+            until(lambda: b'wpa2:' in capture)
+            # Select Android QR mode before exercising the existing scanner fixture.
+            os.write(master, b'r')
             until(lambda: b'QR hidden: terminal too small' in capture)
             fcntl.ioctl(master, termios.TIOCSWINSZ, struct.pack('HHHH', 60, 140, 0, 0))
             until(lambda: qr_pixels(capture) is not None)
         check(not (termios.tcgetattr(master)[3] & termios.ICANON), 'terminal is not raw')
-        check(b'wpa2:' not in capture, 'plaintext offer was printed')
         if actor:
             phone_binary, java, classpath = actor
             decoded = subprocess.run([java, '-cp', classpath, 'HelperQrDecode'],
