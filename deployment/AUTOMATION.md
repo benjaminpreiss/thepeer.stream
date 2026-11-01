@@ -3,9 +3,9 @@
 The target uses the flake-pinned themoss.net updater. A scheduled GitHub
 workflow opens lockfile PRs; after CI and required checks, the target fetches
 reviewed `main`, builds and switches. It does **not** run `nix flake update` on
-the server. See [`WORKFLOW-HANDOFF.md`](WORKFLOW-HANDOFF.md): the workflows
-under `deployment/workflow-templates/` must be copied into `.github/workflows/`
-by a maintainer with workflow-write permission before CI and updates work.
+the server. The workflow-authorized maintainer has installed both workflows
+under `.github/workflows/`; they match the reviewed templates. **CI must pass
+and a scheduled update must be exercised before claiming this works live.**
 
 The reusable workflow is pinned to [themoss.net `bdf91bc`](https://github.com/benjaminpreiss/themoss.net/commit/bdf91bcd0a36d729e9fed9a28b8ca3c508543160),
 which fixes Nix installation on GitHub runners. It runs the consumer-supplied
@@ -42,7 +42,7 @@ relaxation of deployment policy is outside automated lockfile updates.
    Do not grant the App bypass, force-push or direct-main rights. Ruleset-only checks are
    insufficient for this pinned workflow's current branch-protection audit.
    Mandatory human approval would block unattended dependency updates.
-4. After the handoff workflow files are on `main`, manually dispatch
+4. After both workflow files are merged to `main`, manually dispatch
    **Propose and auto-merge relay NixOS updates** once. Confirm its App audit,
    candidate build, PR checks and queued auto-merge actually work. Then verify
    the target's timer picks up the merged commit. Enable monitoring/alerts for
