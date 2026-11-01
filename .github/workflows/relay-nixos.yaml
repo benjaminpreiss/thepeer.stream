@@ -1,0 +1,20 @@
+name: Relay NixOS
+on:
+  push:
+    paths: [ 'flake.nix', 'flake.lock', 'Cargo.toml', 'Cargo.lock', 'crates/relay/**', 'deployment/**', '.github/workflows/relay-nixos.yaml' ]
+  pull_request:
+    paths: [ 'flake.nix', 'flake.lock', 'Cargo.toml', 'Cargo.lock', 'crates/relay/**', 'deployment/**', '.github/workflows/relay-nixos.yaml' ]
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v21
+      - name: Shell syntax and deployment build
+        run: |
+          for script in deployment/scripts/*.sh deployment/tests/*.sh; do bash -n "$script"; done
+          bash deployment/tests/update.sh
+          mkdir -p deployment/generated
+          cp deployment/tests/machine.nix deployment/generated/machine.nix
+          nix build 'path:.#relay' --no-link
+          nix build 'path:.#nixosConfigurations.relay.config.system.build.toplevel' --no-link

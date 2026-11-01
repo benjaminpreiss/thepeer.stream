@@ -15,6 +15,10 @@ invitation.json
 # Retired publisher: preserve local wallets/reports without ever committing them.
 /deployment/irys/
 
+# Private per-target deployment data and local worktrees (never commit).
+/deployment/generated/
+/.worktrees/
+
 # Local build output, dependency caches, logs and editor state.
 node_modules/
 target/

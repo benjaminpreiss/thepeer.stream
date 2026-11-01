@@ -1,0 +1,9 @@
+[package]
+name = "thepeer-relay"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+saorsa-transport.workspace = true
+tokio.workspace = true

@@ -4,12 +4,14 @@
 
 Android owns a tunnel from a normal phone browser to one fixed computer-localhost
 application. The route is **eligible Direct → single-carrier MASQUE Relay**.
-Coordinated punching, automatic reconnect and operating our own relay are out of
-scope for this MVP. Performance and discovery work are deferred.
+Coordinated punching, automatic reconnect and a community-operated public relay
+are out of scope for this MVP. An optional [self-hosted relay deployment](../deployment/README.md)
+is available but has not been physically validated here. Performance and discovery work are deferred.
 
 - `crates/tunnel-core`: offers, planning, retained-peer authentication, HTTP and cleanup.
 - `crates/tunnel-android`: JNI, foreground reservation and sticky Stop.
 - `crates/cli` (package `thepeer-cli`): the `thepeer` desktop CLI, automatic binding and terminal QR.
+- `crates/relay` and `deployment/`: optional Saorsa-compatible NixOS MASQUE relay and installer.
 - `apps/android-controller`: Android UI, scanner, service and Gradle.
 - `tests/fixtures`: disposable public-data application used for host/phone checks.
 - `tests/host`: terminal QR and JNI process fixtures.
@@ -18,8 +20,8 @@ The browser controller/WASM application, relay-status site, transport experiment
 old native/Java diagnostic/viewer implementations and their obsolete guides/runners
 have been removed—not kept as alternate source trees. Research findings and license
 provenance remain in documentation. The unused `deployment/saorsa-relay/`
-scaffold was also removed; no remote service was changed. Other deployment work
-is untouched.
+scaffold was also removed; no remote service was changed. The new minimal
+`deployment/` is separate from that retired scaffold.
 Ignored local build/dependency artifacts were preserved under
 `target/retired-local-artifacts/`; they are not source or release inputs.
 
