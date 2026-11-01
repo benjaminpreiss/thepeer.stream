@@ -45,7 +45,7 @@ for patch in "${patches[@]}"; do
   git -C "$work/saorsa" apply "$patch"
 done
 cp "$root/Cargo.toml" "$root/Cargo.lock" "$native/"
-cp -R "$root/crates/tunnel-core" "$root/crates/tunnel-android" "$root/crates/cli" "$native/crates/"
+cp -R "$root/crates/tunnel-core" "$root/crates/tunnel-android" "$root/crates/cli" "$root/crates/relay" "$native/crates/"
 python3 - "$work" "$native" "$revision" "$root" "${patches[@]}" <<'PY'
 from pathlib import Path
 import hashlib,json,sys
