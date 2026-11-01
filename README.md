@@ -58,43 +58,31 @@ You can also install a draft release or build from source; see the
 
 ## How to
 
-### Start
+### Share an app
 
-**1. Run the CLI in your computer’s terminal.** Press `r` to display the QR code for your local web application.
-
-For a web application already running on your computer at `http://127.0.0.1:3000`:
+On the computer running your web app (including over SSH):
 
 ```sh
 thepeer share localhost:3000
 ```
 
-Replace `3000` with your application's port.
-Keep the CLI running in an interactive terminal. For optional relay fallback, add `--relay IP:PORT` using a compatible
-relay you have permission to use; no relay is configured by default.
+Replace `3000` with the app’s port. Direct is tried first; for relay fallback,
+add `--relay IP:PORT` using a compatible relay you have permission to use.
+No relay is configured by default.
 
-**2. Open the thepeer phone app**, tap **Connect**, and scan the QR code.
+### Open it on your phone
 
-**3. The phone app attempts a direct connection first**, falling back to relay if direct is unavailable.
+Press `r` in the sharing terminal to show the QR. In the Android app, tap
+**Connect** and scan it. The web app opens in your phone’s browser.
 
-**4. Your web application opens in the phone’s browser.**
+### Open it on another computer
 
-### Connect from another computer's terminal
+Run `thepeer connect` on that computer. Paste the sharing terminal’s connection
+string at the hidden prompt, then open the printed local URL in your browser.
 
-While SSHed into the computer hosting the app, run `thepeer share localhost:3000`.
-If Direct cannot reach the server, configure an authorized relay with `--relay IP:PORT`.
-The CLI displays a one-shot connection string. On your own computer, run
-`thepeer connect` and paste the string at its hidden prompt (not in a shell command).
-Open the printed `http://thepeer-….localhost:PORT` URL in your browser. The local
-listener binds only to loopback. Both CLI processes stay open until stopped; you
-can restart the dev server without re-pairing, although active requests or
-WebSockets may disconnect during its restart. A network/tunnel disconnect still
-ends the session. Press Ctrl-C to stop either CLI. For Android scanning, press
-`r` in the sharing terminal to show the QR; `t` shows the text again.
-
-### Stop
-
-- Tap **Stop** in the phone app to end access.
-- There is no healthy-session timer.
+Both CLIs stay open across dev-server restarts; new requests work when the server
+returns. Stop either CLI with Ctrl-C (or tap **Stop** on Android). A broken tunnel
+does not reconnect automatically.
 
 ## Features
 
@@ -124,11 +112,9 @@ tests/fixtures/          Disposable localhost application for host/phone checks
 - [Offer and routing policy](docs/ROUTING-OFFER.md)
 - [Release readiness](docs/RELEASE-READINESS.md)
 
-**Keep live offers private.** Transfer terminal connection strings only through a
-trusted channel such as your SSH terminal; do not put them in shell arguments,
-files, screenshots or logs. The terminal string is a live capability. For phone QRs,
-use only the
-in-app scanner, not Brave's generic QR scanner, which can send payloads to search.
+**Keep live offers private.** Copy the connection string only through a trusted
+terminal; never put it in a command, file, screenshot or log. Scan QRs with the
+app, not a generic scanner that might send them to search.
 
 ## License
 

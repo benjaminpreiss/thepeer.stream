@@ -43,7 +43,10 @@ def rejected_arguments(binary):
         for args in [
             ['--qr-test'], ['--masque-app', '127.0.0.1', '127.0.0.2', '3002'],
             ['--target-port', '3002'],
-            ['--target', 'localhost:3002'], ['connect', 'wpa2:secret'],
+            # Rejection checks, not compatibility aliases: neither old --target
+            # nor a secret on the connect command line may be accepted.
+            ['--target', 'localhost:3002'],
+            ['connect', 'wpa2:secret'],
             ['share', '192.0.2.1:3002'],
             ['share', 'http://localhost:3002'],
             ['share', 'localhost:3002/path'],
