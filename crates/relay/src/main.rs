@@ -29,11 +29,17 @@ async fn main() -> ExitCode {
         .build()
     {
         Ok(config) => config,
-        Err(error) => { eprintln!("configuration: {error}"); return ExitCode::FAILURE; }
+        Err(error) => {
+            eprintln!("configuration: {error}");
+            return ExitCode::FAILURE;
+        }
     };
     let endpoint = match P2pEndpoint::new(config).await {
         Ok(endpoint) => endpoint,
-        Err(error) => { eprintln!("bind: {error}"); return ExitCode::FAILURE; }
+        Err(error) => {
+            eprintln!("bind: {error}");
+            return ExitCode::FAILURE;
+        }
     };
     eprintln!("MASQUE relay listening on {bind}");
     if let Err(error) = tokio::signal::ctrl_c().await {
