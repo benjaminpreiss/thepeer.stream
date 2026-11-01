@@ -1,8 +1,7 @@
 # Enable unattended, Git-first relay OS updates
 
-The local worktree contains two workflow files that the current GitHub App
-cannot push (`workflows` permission is missing). An operator with workflow
-write access must add **both** files from this worktree to `main`:
+An operator with workflow write access must merge these two workflow files
+to `main` (the deployment App does not need workflow write permission):
 
 - `.github/workflows/relay-nixos.yaml`: required PR check; runs updater tests
   and builds the relay and NixOS system with a fake machine module.
@@ -13,14 +12,24 @@ write access must add **both** files from this worktree to `main`:
 
 ## One-time repository configuration
 
-1. Create/install a **dedicated GitHub App** scoped to this repository, granting
-   repository **Contents: read/write** and **Pull requests: read/write**.
-   It needs no Workflows permission because its automated PRs touch only lockfiles.
-   Store its App ID as repository Actions **variable** `RELAY_UPDATE_APP_ID`
-   and its private key as repository Actions **secret**
-   `RELAY_UPDATE_APP_PRIVATE_KEY`. Never put the key in Git or the Nix store.
-   This App token, unlike the default `GITHUB_TOKEN`, triggers PR CI.
-2. Enable repository **Allow auto-merge** under Settings → General → Pull
+1. [Open the prefilled GitHub App creation form](https://github.com/settings/apps/new?name=thepeer-relay-lock-updates&description=Automated%20reviewed%20relay%20dependency%20updates&url=https%3A%2F%2Fgithub.com%2Fbenjaminpreiss%2Fthepeer.stream&public=false&webhook_active=false&request_oauth_on_install=false&contents=write&pull_requests=write)
+   (or [edit an existing App](https://github.com/settings/apps)). If the name
+   is taken, choose another. **Verify the prefilled settings rather than
+   assuming the URL enforces them:** private App, webhooks disabled,
+   OAuth-on-install disabled, repository **Contents: read/write** and
+   **Pull requests: read/write**, with no Workflows, Administration, Secrets
+   or Environments permissions. Install it on **Only select repositories**
+   and select `benjaminpreiss/thepeer.stream`. On the App's General page, copy
+   its **App ID** and generate/download a private key (PEM). Never paste the
+   key into chat or commit it. The App needs no Workflows permission because
+   its automated PRs touch only lockfiles.
+2. In `benjaminpreiss/thepeer.stream` → Settings → Secrets and variables →
+   Actions, add the App ID as repository **variable** `RELAY_UPDATE_APP_ID`
+   and the complete PEM as repository **secret**
+   `RELAY_UPDATE_APP_PRIVATE_KEY`. This App token, unlike the default
+   `GITHUB_TOKEN`, triggers PR CI. It is a GitHub-only automation credential;
+   the server never needs it.
+3. Enable repository **Allow auto-merge** under Settings → General → Pull
    Requests. Configure a `main` branch ruleset requiring the existing `Build and
    test / Direct/Relay core, desktop helper and host JNI` job and the new
    `Relay NixOS / Build relay and NixOS` job to pass before merge. Use the exact
@@ -28,11 +37,11 @@ write access must add **both** files from this worktree to `main`:
    with `main` if available. Ensure the automation App cannot bypass checks.
    A mandatory human-approval rule on these PRs would prevent unattended
    updates; choose the branch policy consciously.
-3. After both workflow files land on `main`, run **Propose and auto-merge relay
+4. After both workflow files land on `main`, run **Propose and auto-merge relay
    NixOS updates** once with workflow_dispatch. Confirm it creates a lockfile-
    only PR, required checks run, and auto-merge waits for them. Confirm the
    installed server's update timer subsequently switches to the merged commit.
-4. Enable notifications/monitoring for failed or stalled scheduled workflows,
+5. Enable notifications/monitoring for failed or stalled scheduled workflows,
    failed PR checks, and `thepeer-relay-update.service` on the server. A failed
    build must not silently leave security updates pending indefinitely.
 
