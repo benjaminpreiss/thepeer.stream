@@ -387,15 +387,10 @@ impl Surface {
                         .map_err(|_| Failure("helper-terminal"))?;
                 } else {
                     for (row, chunk) in offer.as_bytes().chunks(width).enumerate() {
-                        execute!(
-                            out,
-                            cursor::MoveTo(0, row as u16 + 3),
-                            Print(
-                                std::str::from_utf8(chunk)
-                                    .map_err(|_| Failure("helper-terminal"))?
-                            )
-                        )
-                        .map_err(|_| Failure("helper-terminal"))?;
+                        let text =
+                            std::str::from_utf8(chunk).map_err(|_| Failure("helper-terminal"))?;
+                        execute!(out, cursor::MoveTo(0, row as u16 + 3), Print(text))
+                            .map_err(|_| Failure("helper-terminal"))?;
                     }
                 }
             }
