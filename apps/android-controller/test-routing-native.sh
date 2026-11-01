@@ -30,3 +30,4 @@ printf '#!/usr/bin/env bash\nexec %q %q -cp %q dev.webp2p.controllerprobe.Routin
 chmod +x "$actor"
 python3 "$root/tests/host/helper_process_tests.py" \
     "$CARGO_TARGET_DIR/debug/thepeer" "$actor" "$JAVA_HOME/bin/java" "$classes:$jar"
+python3 "$root/tests/host/terminal_pair_tests.py" "$CARGO_TARGET_DIR/debug/thepeer"

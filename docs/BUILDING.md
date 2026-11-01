@@ -55,7 +55,7 @@ node tests/fixtures/application-app.mjs 3002
 In another interactive terminal, from the repository root:
 
 ```sh
-./target/build/debug/thepeer --target localhost:3002
+./target/build/debug/thepeer share localhost:3002
 ```
 
 It displays a live pairing QR. Do not redirect, save or screenshot it. Keep the

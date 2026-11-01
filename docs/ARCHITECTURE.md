@@ -9,9 +9,12 @@ the underlying peer transport, cryptography and optional relay mechanism. Thepee
 provides pairing, route policy, application authorization, browser integration and
 session ownership.
 
-This describes the current Android-browser MVP, not a proposed VPN, public hosting
-service or terminal-to-terminal tunnel. Hosted release/signing and post-refactor
-physical validation remain separate gates; see [release readiness](RELEASE-READINESS.md).
+The diagram below describes Android browser pairing. For terminal-to-terminal
+sharing, `thepeer connect` replaces the Android app: it receives the same one-shot
+offer through a hidden terminal prompt, authenticates the host and runs the same
+loopback HTTP gateway on the user's computer. It does not provide a shell, VPN or
+unrestricted TCP forwarding. Hosted release/signing and physical validation remain
+separate gates; see [release readiness](RELEASE-READINESS.md).
 
 ## 1. What runs where
 
@@ -173,7 +176,7 @@ On the computer, the CLI RESOLVES THE TARGET ONCE AT STARTUP, before publishing
 the pairing QR.
 
 ```text
-  --target localhost:3000
+  thepeer share localhost:3000
               │
               ▼
   ┌─────────────────┐  hostname  ┌──────────────────┐
@@ -395,7 +398,7 @@ The phone gateway connects the browser's temporary session address to your local
 app. It has three main responsibilities:
 
 - **Check each request.** Only requests allowed for the current session are
-  forwarded. The browser cannot change the local app selected by `--target`.
+  forwarded. The browser cannot change the local app selected by `share`.
 - **Adapt HTTP addresses.** The CLI securely tells the phone the app's hostname
   and port. The phone uses that information to adjust request headers and
   redirects—not to look up or connect to the app itself. The CLI makes that

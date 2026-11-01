@@ -26,8 +26,11 @@ Encoding does not renew a grant or extend the helper's lifetime. Healthy session
 have no arbitrary lifetime; scanner expiry is separate.
 
 **Encoded text and decoded bytes contain a live capability.** Never put them in
-logs, argv, clipboard, screenshots, files, preferences, saved state or Intents.
-Only live terminal display and explicit in-memory/anonymous-pipe transfer are intended.
+logs, argv, screenshots, files, preferences, saved state or Intents. The sharing
+CLI intentionally displays the one-shot string for transfer over a trusted terminal
+(e.g. an SSH session); the connecting CLI accepts it only at a hidden interactive
+prompt. Clipboard use is a user-controlled risk, not an automatic CLI action. The
+Android QR remains an in-memory scanner handoff.
 Malformed offers return only the nonsecret `route-offer-format` stage.
 
 ## Wire layout

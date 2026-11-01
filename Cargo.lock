@@ -2808,7 +2808,9 @@ dependencies = [
 name = "thepeer-cli"
 version = "0.1.0"
 dependencies = [
+ "hex",
  "qrcode",
+ "rand 0.8.8",
  "ratatui",
  "tokio",
  "tokio-util",
