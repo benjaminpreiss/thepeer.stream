@@ -21,9 +21,9 @@ advertise unwanted services. Relay performance and participant discovery are lat
 work, not reasons to keep the retired browser-owned controller or public-relay
 prototype in the product tree.
 
-The shared Rust core permits future desktop clients or additional explicitly scoped
-protocols such as SSH without duplicating transport/security policy. Those are
-future possibilities, not implemented MVP interfaces or a reason to expose an
-unrestricted TCP proxy now.
+The desktop `thepeer connect` client uses the same one-shot authenticated offer and
+bounded HTTP gateway to browse a single explicitly configured localhost app. It does
+not expose an unrestricted TCP proxy or shell. Other scoped protocols such as SSH
+remain future possibilities.
 
 See [current evidence](STATUS.md) and [release gates](RELEASE-READINESS.md).

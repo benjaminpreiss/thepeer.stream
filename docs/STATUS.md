@@ -2,14 +2,14 @@
 
 ## Product and layout
 
-Android owns a tunnel from a normal phone browser to one fixed computer-localhost
-application. The route is **eligible Direct → single-carrier MASQUE Relay**.
+Android or a second desktop CLI owns a tunnel from a normal browser to one fixed
+computer-localhost application. The route is **eligible Direct → single-carrier MASQUE Relay**.
 Coordinated punching, automatic reconnect and operating our own relay are out of
 scope for this MVP. Performance and discovery work are deferred.
 
 - `crates/tunnel-core`: offers, planning, retained-peer authentication, HTTP and cleanup.
 - `crates/tunnel-android`: JNI, foreground reservation and sticky Stop.
-- `crates/cli` (package `thepeer-cli`): the `thepeer` desktop CLI, automatic binding and terminal QR.
+- `crates/cli` (package `thepeer-cli`): `share` host, terminal one-shot offer/Android QR, and `connect` desktop browser gateway.
 - `apps/android-controller`: Android UI, scanner, service and Gradle.
 - `tests/fixtures`: disposable public-data application used for host/phone checks.
 - `tests/host`: terminal QR and JNI process fixtures.
@@ -47,7 +47,9 @@ same-Wi-Fi Direct, cellular Relay and Stop on both. Cellular Relay remains notic
 slow; no performance diagnosis or universal NAT guarantee is claimed.
 
 The cleaned checkout still requires operator native restaging, APK installation
-and repeat physical checks after code review.
+and repeat physical checks after code review. The new terminal-to-terminal CLI path
+also needs its host PTY/HTTP restart fixture and a real two-machine check before
+claiming validated behavior.
 
 ## Release automation
 

@@ -6,9 +6,10 @@ fn args(values: &[&str]) -> Arguments {
 
 #[test]
 fn bind_is_optional_but_target_is_required() {
-    assert!(args(&["--target", "localhost:3002"]).bind.is_none());
+    assert!(args(&["localhost:3002"]).bind.is_none());
     assert!(arguments(&[]).is_err());
-    assert!(arguments(&["--target".into(), "localhost:0".into()]).is_err());
+    assert!(arguments(&["localhost:0".into()]).is_err());
+    assert!(arguments(&["--target".into(), "localhost:3002".into()]).is_err());
 }
 
 #[test]
@@ -19,8 +20,7 @@ fn target_is_a_host_and_port_not_a_url_or_nonlocal_literal() {
         "[::1]:4321",
         "myapp.test:4321",
     ] {
-        // Hostname loopback validation belongs to preparation, after resolution.
-        let parsed = args(&["--target", authority]);
+        let parsed = args(&[authority]);
         assert_eq!(parsed.target.port(), 4321);
         assert_eq!(parsed.target.authority(), authority);
     }
@@ -43,13 +43,12 @@ fn target_is_a_host_and_port_not_a_url_or_nonlocal_literal() {
         " localhost:4321",
     ] {
         assert!(
-            arguments(&["--target".into(), value.into()]).is_err(),
+            arguments(&[value.into()]).is_err(),
             "accepted invalid target"
         );
     }
     assert!(
         arguments(&[
-            "--target".into(),
             "localhost:4321".into(),
             "--target".into(),
             "localhost:4322".into()
@@ -62,7 +61,6 @@ fn target_is_a_host_and_port_not_a_url_or_nonlocal_literal() {
 #[test]
 fn explicit_bind_is_preserved_without_discovery() {
     let (config, relay) = args(&[
-        "--target",
         "localhost:3002",
         "--bind",
         "127.0.0.1:43210",
@@ -81,14 +79,9 @@ fn participant_route_discovers_a_local_ip_without_sending_a_datagram() {
         let peer = UdpSocket::bind(destination).unwrap();
         peer.set_nonblocking(true).unwrap();
         let destination = peer.local_addr().unwrap();
-        let (config, relay) = args(&[
-            "--target",
-            "localhost:3002",
-            "--relay",
-            &destination.to_string(),
-        ])
-        .resolve()
-        .unwrap();
+        let (config, relay) = args(&["localhost:3002", "--relay", &destination.to_string()])
+            .resolve()
+            .unwrap();
         assert_eq!(config.bind.ip(), destination.ip());
         assert_eq!(config.bind.port(), 0, "lookup port must not be advertised");
         assert_eq!(relay, Some(destination));
@@ -96,7 +89,6 @@ fn participant_route_discovers_a_local_ip_without_sending_a_datagram() {
             peer.recv_from(&mut [0; 2048]).unwrap_err().kind(),
             io::ErrorKind::WouldBlock
         );
-        // The result is an explicit, bindable address, not a wildcard.
         let actual = UdpSocket::bind(config.bind).unwrap();
         assert_eq!(actual.local_addr().unwrap().ip(), destination.ip());
     }
@@ -106,12 +98,11 @@ fn participant_route_discovers_a_local_ip_without_sending_a_datagram() {
 fn mixed_participant_families_fail_before_discovery() {
     assert!(matches!(
         args(&[
-            "--target",
             "localhost:3002",
             "--observer",
             "127.0.0.1:10000",
             "--relay",
-            "[::1]:10000",
+            "[::1]:10000"
         ])
         .resolve(),
         Err(Failure("route-family"))
