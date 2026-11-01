@@ -1,5 +1,15 @@
 # Enable unattended, Git-first relay OS updates
 
+The target's install/update mechanics now use the flake-pinned themoss.net toolkit.
+The scheduled lockfile workflow remains consumer-local **temporarily**: the
+[pinned shared reusable workflow](https://github.com/benjaminpreiss/themoss.net/blob/dac598fad0dfd8c6fb3bd415f5617eb53d0a0884/.github/workflows/lock-updates.yml)
+does not install Nix on `ubuntu-latest`; see [themoss.net#5](https://github.com/benjaminpreiss/themoss.net/issues/5).
+After that fix is merged and pinned, replace this scheduled workflow with a
+`workflow_call` caller, use the committed `.github/app-permissions.json` for the
+shared App audit, and delete the duplicate lockfile automation logic. Do not
+claim the shared workflow works until its real caller succeeds. Host machine
+configuration and App secrets remain outside themoss.net.
+
 An operator with workflow write access must merge these two workflow files
 to `main` (the deployment App does not need workflow write permission):
 

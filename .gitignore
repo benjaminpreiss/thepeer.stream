@@ -16,7 +16,9 @@ invitation.json
 /deployment/irys/
 
 # Private per-target deployment data and local worktrees (never commit).
+# Legacy private test data; do not commit.
 /deployment/generated/
+/generated/
 /.worktrees/
 
 # Local build output, dependency caches, logs and editor state.

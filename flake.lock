@@ -55,7 +55,24 @@
       "inputs": {
         "disko": "disko",
         "facter": "facter",
-        "nixpkgs": "nixpkgs"
+        "nixpkgs": "nixpkgs",
+        "themoss": "themoss"
+      }
+    },
+    "themoss": {
+      "locked": {
+        "lastModified": 1793566258,
+        "narHash": "sha256-IG2Y2tnC8VIRk2qcSUbeAJOg6Dy+M1QkABuibpQDmv8=",
+        "owner": "benjaminpreiss",
+        "repo": "themoss.net",
+        "rev": "dac598fad0dfd8c6fb3bd415f5617eb53d0a0884",
+        "type": "github"
+      },
+      "original": {
+        "owner": "benjaminpreiss",
+        "repo": "themoss.net",
+        "rev": "dac598fad0dfd8c6fb3bd415f5617eb53d0a0884",
+        "type": "github"
       }
     }
   },

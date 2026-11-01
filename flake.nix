@@ -5,8 +5,9 @@
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
     facter.url = "github:numtide/nixos-facter-modules";
+    themoss.url = "github:benjaminpreiss/themoss.net/dac598fad0dfd8c6fb3bd415f5617eb53d0a0884";
   };
-  outputs = { nixpkgs, disko, facter, ... }:
+  outputs = inputs@{ nixpkgs, disko, facter, themoss, ... }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -30,18 +31,19 @@
       packages.${system}.relay = relay;
       nixosConfigurations.relay = nixpkgs.lib.nixosSystem {
         inherit system;
+        specialArgs = { inherit inputs; relayPackage = relay; };
         modules = [
           disko.nixosModules.disko
           facter.nixosModules.facter
           ./deployment/modules/base.nix
           ./deployment/modules/disk.nix
           ./deployment/modules/relay.nix
+          themoss.nixosModules.update
           ./deployment/modules/update.nix
-          ./deployment/generated/machine.nix
-          ({ lib, ... }: lib.mkIf (builtins.pathExists ./deployment/generated/facter.json) {
-            hardware.facter.reportPath = ./deployment/generated/facter.json;
+          ./generated/machine.nix
+          ({ lib, ... }: lib.mkIf (builtins.pathExists ./generated/facter.json) {
+            hardware.facter.reportPath = ./generated/facter.json;
           })
-          { _module.args.relayPackage = relay; }
         ];
       };
     };
