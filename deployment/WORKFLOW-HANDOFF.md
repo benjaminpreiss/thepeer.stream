@@ -1,24 +1,28 @@
-# Workflow edit needed before CI can pass
+# Workflow-authorized handoff before CI/merge
 
-The GitHub App used by this coding agent cannot push changes to
-`.github/workflows/`. The relay PR now uses the pinned themoss toolkit and
-**deleted** `deployment/tests/update.sh`; a workflow-authorized maintainer must
-edit both existing workflow files on the PR branch:
+The GitHub App used by this coding agent cannot push `.github/workflows/`.
+A maintainer with workflow write permission must copy the **exact** files
+committed under `deployment/workflow-templates/` on this PR branch to:
 
-- `.github/workflows/relay-nixos.yaml`: in the `Test updater and build the
-  installed OS` step, replace the old `bash deployment/tests/update.sh`,
-  `deployment/generated/machine.nix` fixture copy and two `nix build` commands
-  with `bash deployment/tests/integration.sh`. Keep its preceding shell syntax
-  check.
-- `.github/workflows/relay-nixos-updates.yaml`: in `Build candidate before
-  proposing it`, likewise replace the old updater test, fixture copy and two
-  Nix builds with `bash deployment/tests/integration.sh`.
+```text
+deployment/workflow-templates/relay-nixos.yaml
+  → .github/workflows/relay-nixos.yaml
+deployment/workflow-templates/relay-nixos-updates.yaml
+  → .github/workflows/relay-nixos-updates.yaml
+```
 
-`integration.sh` runs the pinned shared toolkit's safety fixtures, evaluates
-both candidate (timer off) and production (timer on) policies, and builds the
-relay and NixOS output with a synthetic machine. It refuses to replace a real
-private machine module. Run `actionlint` after editing.
+The old CI still calls the deleted `deployment/tests/update.sh`, so it cannot
+pass until the first replacement is made. The new CI runs
+`deployment/tests/integration.sh` with a synthetic machine, checks both timer
+policies, the pinned themoss toolkit fixtures and a full NixOS build.
 
-The scheduled lockfile workflow still carries its consumer-local implementation
-because the shared reusable workflow at the pinned toolkit revision does not
-install Nix on `ubuntu-latest` ([themoss.net#5](https://github.com/benjaminpreiss/themoss.net/issues/5)). Once that issue is merged, pin the new toolkit revision and replace the scheduled workflow with a thin `workflow_call` caller and `.github/app-permissions.json`; do **not** enable the broken reusable workflow in the meantime.
+The new scheduled caller pins the **fixed** shared themoss workflow at
+`bdf91bcd0a36d729e9fed9a28b8ca3c508543160` ([issue #5](https://github.com/benjaminpreiss/themoss.net/issues/5))
+and removes duplicated lockfile-update logic. It requires
+`.github/app-permissions.json` and a dedicated App ID/private key in Actions
+**secrets** (`RELAY_UPDATE_APP_ID`, `RELAY_UPDATE_APP_PRIVATE_KEY`), not an ID
+in Actions variables as the previous workflow used. See
+[`AUTOMATION.md`](AUTOMATION.md) for permissions and required classic branch
+protection. Run `actionlint` on both files and verify the scheduled workflow
+with `workflow_dispatch` after they are on `main`. No real App, server or
+live auto-merge has been tested here.

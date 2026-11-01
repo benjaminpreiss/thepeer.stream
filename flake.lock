@@ -61,17 +61,17 @@
     },
     "themoss": {
       "locked": {
-        "lastModified": 1793566258,
-        "narHash": "sha256-IG2Y2tnC8VIRk2qcSUbeAJOg6Dy+M1QkABuibpQDmv8=",
+        "lastModified": 1793568079,
+        "narHash": "sha256-Hx6KFeeGzRwdgsqL+se2CsTln8QW+r1cmXuNm2sgtYk=",
         "owner": "benjaminpreiss",
         "repo": "themoss.net",
-        "rev": "dac598fad0dfd8c6fb3bd415f5617eb53d0a0884",
+        "rev": "bdf91bcd0a36d729e9fed9a28b8ca3c508543160",
         "type": "github"
       },
       "original": {
         "owner": "benjaminpreiss",
         "repo": "themoss.net",
-        "rev": "dac598fad0dfd8c6fb3bd415f5617eb53d0a0884",
+        "rev": "bdf91bcd0a36d729e9fed9a28b8ca3c508543160",
         "type": "github"
       }
     }

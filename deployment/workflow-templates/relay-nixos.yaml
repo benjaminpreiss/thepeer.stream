@@ -1,0 +1,27 @@
+name: Relay NixOS
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build relay and NixOS
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+      - name: Test shared toolkit, timer policies and installed OS
+        run: |
+          set -euo pipefail
+          for script in deployment/scripts/*.sh deployment/tests/*.sh; do bash -n "$script"; done
+          bash deployment/tests/integration.sh
