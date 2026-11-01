@@ -21,6 +21,9 @@ On a Linux/macOS deployment computer with Bash, SSH and Nix (flakes enabled):
    using a trusted key, and verify the **SSH host key out of band**.
 2. From this repository's root, run
    `bash deployment/scripts/prepare.sh root@HOST ~/.ssh/id_ed25519.pub`.
+   For a **pre-merge test of this PR branch**, append `--test-deploy`.
+   It disables the update timer and the installer's first update, so the
+   target cannot fetch `main` over the candidate before validation.
    This queries architecture, boot mode, default route/NIC MAC and whole disks.
    Enter the full **whole disk** to erase, confirm DHCP and review
    `deployment/generated/machine.nix`. These files are Git-ignored, private
@@ -33,12 +36,12 @@ On a Linux/macOS deployment computer with Bash, SSH and Nix (flakes enabled):
    confirmation, calls pinned `nixos-anywhere` with Disko and produces a local
    facter report. **Do not use this for updates or repairs.** After reboot,
    it uploads the machine module and hardware report to `/var/lib/thepeer-relay/`
-   on the target and starts the first non-destructive update. If the post-boot
+   on the target and (except in `--test-deploy` mode) starts the first non-destructive update. If the post-boot
    upload fails, recover via the console and copy these two files manually;
    do not reinstall.
 5. Verify the installed machine's new SSH host fingerprint via the provider
    console; check `systemctl status thepeer-relay`,
-   `systemctl status thepeer-relay-update.timer` and
+   `systemctl status thepeer-relay-update.timer` (inactive in test mode) and
    `journalctl -u thepeer-relay-update -u thepeer-relay -b`.
    Test `thepeer --target localhost:PORT --relay PUBLIC_IP:10000` and Android
    cellular Relay after a real Direct failure; also verify normal Direct.
@@ -54,7 +57,8 @@ is present in the evaluation but is invoked only by the installer.
 
 ## Unattended updates and recovery
 
-The target timer (after boot and then daily with jitter) runs as root. It
+The target timer (after boot and then daily with jitter) runs as root when
+`peerRelay.autoUpdate = true` (the default). Test deployments set it to false. It
 fetches `main` from this public GitHub repository, requires a clean checkout
 and a fast-forward, archives the fetched revision into a disposable stage,
 adds its private machine config/facter report, and builds the locked flake
@@ -66,6 +70,13 @@ advanced only after `switch` succeeds. It never runs Disko. Review merges to
 `flake.lock` and the Cargo lock/source hash are committed. No unreviewed PR
 branch is executed on the target. Check flake lock changes in review.
 
+- After a successful pre-merge test and merge to `main`, enable updates by
+  setting `autoUpdate = true;` in the private machine module on both the target
+  and the deployment computer, then run
+  `systemctl start thepeer-relay-update.service` on the target. It fetches and
+  switches to the now-merged `main`, activating the timer. Confirm that the
+  running revision and timer match expectations. Do **not** start the service
+  before merging or it will switch to the *old* `main`.
 - Trigger: `systemctl start thepeer-relay-update.service`
 - Pause: `systemctl stop thepeer-relay-update.timer` and
   `systemctl disable thepeer-relay-update.timer` (re-enable after diagnosis).

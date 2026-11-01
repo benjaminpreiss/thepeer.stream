@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Run from the deployment laptop. Only supports one IPv4 DHCP interface.
 set -euo pipefail
-[[ $# == 2 ]] || { echo 'usage: prepare.sh root@HOST SSH_PUBLIC_KEY_FILE' >&2; exit 2; }
+[[ $# == 2 || ( $# == 3 && $3 == --test-deploy ) ]] || {
+  echo 'usage: prepare.sh root@HOST SSH_PUBLIC_KEY_FILE [--test-deploy]' >&2; exit 2;
+}
+# Test installs must not fetch main over the candidate branch before validation.
+auto_update=true
+[[ ${3:-} != --test-deploy ]] || auto_update=false
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
 target=$1
 keyfile=$2
@@ -45,6 +50,7 @@ cat >"$root/deployment/generated/machine.nix" <<EOF
     bootMode = "$boot";
     mac = "$mac";
     sshKey = "$kind $key";
+    autoUpdate = $auto_update;
   };
 }
 EOF

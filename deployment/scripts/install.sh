@@ -19,5 +19,10 @@ nix run github:nix-community/nixos-anywhere/58132e1d1f813b845382a2aeca4203b18d2a
 # retry these two commands manually rather than rerunning the disk installer.
 ssh -o BatchMode=yes "$target" 'install -d -m 0700 /var/lib/thepeer-relay'
 scp -q "$private/machine.nix" "$private/facter.json" "$target:/var/lib/thepeer-relay/"
-ssh -o BatchMode=yes "$target" 'chmod 0600 /var/lib/thepeer-relay/{machine.nix,facter.json}; systemctl start thepeer-relay-update.service'
-echo 'Verify relay, timer and SSH host fingerprint through provider console.'
+ssh -o BatchMode=yes "$target" 'chmod 0600 /var/lib/thepeer-relay/{machine.nix,facter.json}'
+if grep -q '^[[:space:]]*autoUpdate = true;' "$private/machine.nix"; then
+  ssh -o BatchMode=yes "$target" 'systemctl start thepeer-relay-update.service'
+else
+  echo 'TEST DEPLOY: update timer disabled and no update started. Do not enable until ready to switch to main.'
+fi
+echo 'Verify relay and SSH host fingerprint through provider console.'

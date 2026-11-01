@@ -9,6 +9,7 @@ let cfg = config.peerRelay; in {
     sshPort = lib.mkOption { type = lib.types.port; default = 22; };
     relayPort = lib.mkOption { type = lib.types.port; default = 10000; };
     bindIP = lib.mkOption { type = lib.types.str; default = "0.0.0.0"; };
+    autoUpdate = lib.mkOption { type = lib.types.bool; default = true; };
   };
   config = {
     system.stateVersion = "26.05";

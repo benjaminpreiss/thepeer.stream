@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let updater = pkgs.writeShellApplication {
   name = "thepeer-relay-update";
   runtimeInputs = with pkgs; [ bash git nix nixos-rebuild coreutils util-linux gnutar ];
@@ -13,7 +13,7 @@ let updater = pkgs.writeShellApplication {
     };
   };
   systemd.timers.thepeer-relay-update = {
-    wantedBy = [ "timers.target" ];
+    wantedBy = lib.optional config.peerRelay.autoUpdate "timers.target";
     timerConfig = {
       OnBootSec = "20min";
       OnUnitInactiveSec = "24h";
