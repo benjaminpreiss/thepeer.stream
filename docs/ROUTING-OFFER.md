@@ -1,22 +1,23 @@
 # Target routing offer
 
-The helper and phone accept only **`wpa2:`**, not legacy `wpr1:`, `wpa1:` or
-`wpt1:` formats. Android **0.6-direct-relay-preview** adds bounded-address and
-observer hints. Older decoders reject the new flags: rebuild the native library
-and APK before pairing with the rebuilt helper. No old format is translated.
+The sharing CLI, connecting CLI and Android app accept only **`wpa2:`**, not
+legacy `wpr1:`, `wpa1:` or `wpt1:` formats. Use matching binaries/app from one
+release or source revision; older decoders reject newer flags. No old format is
+translated.
 
 Implementation: `crates/tunnel-core/src/route_offer.rs`, exposed through
-`peer_route::Offer::{encode,decode}`. JNI calls `peer_route::connect`, the sole
+`peer_route::Offer::{encode,decode}`. JNI and the desktop connecting CLI use `peer_route::connect`, the sole
 Direct/Relay entry point. The historical three-route adapter has been removed.
 
 ## Interface and ownership
 
-- `offer.encode()` returns a zeroizing, in-memory QR payload.
+- `offer.encode()` returns zeroizing in-memory text displayed by `share` by default;
+  `r` presents the same one-shot offer as an Android QR, `t` returns to text.
 - `Offer::decode(&str)` performs bounded canonical validation without network,
   DNS, browser, filesystem or service activity.
-- The phone acquires its own observation from the explicitly offered participant,
+- The browsing peer acquires its own observation from the explicitly offered participant,
   if present, then plans eligible Direct candidates followed by Relay.
-- Each attempted candidate must authorize the actual computer pin before sending
+- Each attempted candidate must authorize the actual sharing computer pin before sending
   the grant. Only classified no-response advances the plan. Authentication,
   protocol, observer/bootstrap, family, cancellation and cleanup errors are terminal.
 
@@ -30,7 +31,8 @@ logs, argv, screenshots, files, preferences, saved state or Intents. The sharing
 CLI intentionally displays the one-shot string for transfer over a trusted terminal
 (e.g. an SSH session); the connecting CLI accepts it only at a hidden interactive
 prompt. Clipboard use is a user-controlled risk, not an automatic CLI action. The
-Android QR remains an in-memory scanner handoff.
+Android QR remains an in-memory scanner handoff. The first peer wins; pair
+again with a fresh offer after Stop or a tunnel disconnect, not a reused QR.
 Malformed offers return only the nonsecret `route-offer-format` stage.
 
 ## Wire layout
@@ -59,7 +61,7 @@ All hints, even unused ones, reject unspecified/multicast/broadcast addresses,
 zero ports, IPv4-mapped IPv6, IPv6 link-local addresses, and nonzero scope/flow metadata.
 Private and loopback addresses remain representable. Structure is not proof of
 reachability or authority. Mixed families are representable; a selected operation
-must match the phone's explicitly selected family. No NAT64 synthesis or automatic
+must match the browsing peer's explicitly selected family. No NAT64 synthesis or automatic
 family switch is added.
 
 ## Address roles and planning
@@ -69,10 +71,10 @@ observation of that same ordinary UDP endpoint. An explicit `--observer` supplie
 the observation preferentially; otherwise the configured relay service does.
 The separately allocated relay contact is never substituted for an observation.
 
-With an observer hint, the phone opens a client-only ordinary connection and reads
+With an observer hint, the browsing peer opens a client-only ordinary connection and reads
 that retained connection's observed address. It fully retires this observation
 endpoint/runtime before application attempts. Only the observed **IP** is used as
-context; its UDP port is not advertised or used as the phone's later dial socket.
+context; its UDP port is not advertised or used as the browsing peer's later dial socket.
 Different NAT mappings/public-IP pools can therefore make the hint inaccurate.
 
 The planner adapts Saorsa-core's conservative shared-WAN rule:
@@ -94,16 +96,17 @@ this production plan. No route-latency race or live relay-to-Direct upgrade is a
 
 ## Evidence
 
-After the package/legacy cleanup, **89 core tests and four helper tests pass**.
-They include nine planner checks, layout/truncation and retired-flag rejection,
+Host checks include planner checks, layout/truncation and retired-flag rejection,
 actual decoded-offer Direct HTTP, observer→Relay HTTP/Stop, observer Stop/drop,
 admission/authorization races, forged-signature positive control and resource release.
-The old 157-test figure included retired designs and is not the current suite count.
+Earlier test counts included retired designs and are not a current suite count;
+rerun tests at the target revision.
 
 The real helper terminal QR→scanner→Java/JNI→Direct HTTP/body/header checks→Stop suite also
 passed. Validation logs are local artifacts, not release inputs.
 
-The user separately confirmed Wi-Fi Direct, cellular Relay and Stop with the
-pre-split 0.6 build and automatic binding. That is not post-refactor APK validation
-or a performance/NAT guarantee. Repeat physical checks after rebuilding; see
+Earlier Android checks confirmed Wi-Fi Direct, cellular Relay and Stop; later
+macOS-to-OrbStack Linux VM Direct browsing before/after a dev-server restart and
+the Android QR path were checked. Terminal-to-terminal Relay is still unverified.
+None proves a packaged release or universal NAT reachability. Repeat checks; see
 [human testing](HUMAN-TESTING.md).

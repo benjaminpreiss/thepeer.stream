@@ -1,12 +1,13 @@
 # thepeer.stream: browser access to a computer-localhost application
 
 The MVP exposes one explicitly configured computer-localhost web application to a
-normal phone browser. An installed Android app—not browser JavaScript—owns the
-Saorsa connection and a fresh local browser origin. The CLI owns the
-fixed target and displays a one-shot pairing QR.
+normal browser on an Android phone or another computer. The installed Android app
+or desktop `thepeer connect` CLI—not browser JavaScript—owns the Saorsa connection
+and a fresh loopback browser origin. The sharing CLI owns the fixed target and
+shows a one-shot text offer by default (`r` for the same offer as a QR, `t` for text).
 
-The user explicitly connects, scans a trusted helper and can Stop access at any
-time. Authenticate the intended computer on the retained TLS connection before
+The user explicitly pastes the offer at the desktop CLI's hidden prompt or scans
+it with the Android app and can Stop access at any time. Authenticate the intended computer on the retained TLS connection before
 sending the grant. Do not persist or log capabilities, reconnect automatically,
 expose arbitrary destinations or impose a healthy-session timer.
 
@@ -22,7 +23,7 @@ work, not reasons to keep the retired browser-owned controller or public-relay
 prototype in the product tree.
 
 The desktop `thepeer connect` client uses the same one-shot authenticated offer and
-bounded HTTP gateway to browse a single explicitly configured localhost app. It does
+bounded loopback-only HTTP gateway to browse a single explicitly configured localhost app. It does
 not expose an unrestricted TCP proxy or shell. Other scoped protocols such as SSH
 remain future possibilities.
 

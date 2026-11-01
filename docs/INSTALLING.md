@@ -1,8 +1,9 @@
 # Install thepeer
 
 Choose a published release for normal use, a draft release for pre-publication
-testing, or a source build for development. Use the CLI and Android app from the
-same release or source revision.
+testing, or a source build for development. Use matching CLI versions on both
+computers, and the Android app from the same release or source revision as the
+sharing CLI.
 
 ## Published releases
 
@@ -23,14 +24,23 @@ Supported binaries: Linux x86_64 with glibc 2.35+, and macOS 15+ on Apple silico
 or Intel. macOS binaries are not notarized. Checksums detect mismatched downloads;
 they are not independent publisher authentication.
 
-For a specific published version or prerelease, set its tag explicitly:
+For a specific **published** version or published prerelease, set its tag explicitly
+(replace `TAG` with the actual release tag):
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=v0.1.0 sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=TAG sh
 ```
 
-Replace `v0.1.0` with the desired tag. The default installer excludes prereleases
-and drafts; an explicit version supports published prereleases, **not drafts**.
+The default installer excludes prereleases and drafts; an explicit version supports
+published prereleases, **not drafts**. To test a published prerelease without
+replacing a stable installation, set `THEPEER_PREFIX` to a separate directory:
+
+```sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=TAG THEPEER_PREFIX="$HOME/thepeer-prerelease" sh
+"$HOME/thepeer-prerelease/bin/thepeer" --help
+```
+
+Run that binary explicitly for both `share` and `connect` during the test.
 
 ### Android app
 
@@ -69,15 +79,15 @@ wait for the complete draft before installing.
 
 ### Download, verify and install the draft CLI
 
-Run the following in Bash or Zsh on a supported computer. Replace `v0.1.0` with
-the draft's tag. This downloads all five assets so every checksum can be checked,
-installs the CLI, and keeps the APK and license archives for review. It does not
-publish the draft or execute the downloaded CLI.
+Run the following in Bash or Zsh on a supported computer. Set `version` to the
+actual draft tag. This downloads all five assets so every checksum can be checked,
+installs the CLI to a separate test directory, and keeps the APK and license archives
+for review. It does not publish the draft or execute the downloaded CLI.
 
 ```sh
 (
   set -eu
-  version=v0.1.0
+  version=TAG
   repo=benjaminpreiss/thepeer.stream
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64) platform=linux-x86_64 ;;
@@ -94,18 +104,18 @@ publish the draft or execute the downloaded CLI.
   name="thepeer.stream-$version-$platform"
   tar -xzOf "$download/$name.tar.gz" "$name/thepeer" > "$download/thepeer"
   test -s "$download/thepeer"
-  mkdir -p "$HOME/.local/bin"
-  install -m 755 "$download/thepeer" "$HOME/.local/bin/thepeer"
-  printf 'Installed draft CLI. Keep its archive for licenses: %s\n' "$download/$name.tar.gz"
+  mkdir -p "$HOME/thepeer-draft/bin"
+  install -m 755 "$download/thepeer" "$HOME/thepeer-draft/bin/thepeer"
+  printf 'Test CLI: %s\nKeep its archive for licenses: %s\n' "$HOME/thepeer-draft/bin/thepeer" "$download/$name.tar.gz"
   printf 'Android APK: %s/thepeer.stream-%s-android-arm64.apk\n' "$download" "$version"
 )
 ```
 
 The subshell stops on download/checksum/extraction errors before installation.
 On Linux without `shasum`, substitute `sha256sum --check SHA256SUMS` for the checksum
-command. Add `~/.local/bin` to `PATH` if needed. This replaces any CLI already at
-that location; rerun the regular installer to return to the latest published release.
-Retain the verified archive for its licenses and build metadata.
+command. Run the test binary by its full path on both sharing and browsing
+computers; this does not replace `~/.local/bin/thepeer`. Retain the verified archive
+for its licenses and build metadata.
 
 ### Install the draft Android app
 
@@ -114,16 +124,18 @@ it and allow installation. Keep its matching `android-arm64-licenses.tar.gz` arc
 Alternatively, with Android platform tools installed and USB debugging authorized:
 
 ```sh
-adb install -r /path/to/thepeer.stream-v0.1.0-android-arm64.apk
+adb install -r /path/to/thepeer.stream-TAG-android-arm64.apk
 ```
 
 Draft APKs produced by the release workflow use the release signing key. Android
 updates require the same signing identity and a compatible version code; an older
-build may be rejected. Debug source builds use a separate ID, `stream.thepeer.debug`, and can coexist
-with release builds.
+build may be rejected. Installing a release-signed RC over a stable APK can prevent
+reinstalling the older stable APK without uninstalling it; test on a separate device
+if you need to preserve that installation. Debug source builds use a separate ID,
+`stream.thepeer.debug`, and can coexist with release builds.
 
-Draft status is not a quality guarantee. Test Direct, Relay and Stop using the
-[physical testing guide](HUMAN-TESTING.md) before promoting a draft. Release
+Draft status is not a quality guarantee. Test Direct, optionally configured Relay
+(with an authorized participant), and Stop using the [physical testing guide](HUMAN-TESTING.md) before promoting a draft. Release
 creation and publication are documented separately in [releasing](RELEASING.md).
 
 ## Build and install from source
@@ -151,4 +163,4 @@ Use the project's build scripts rather than an unpatched root `cargo build`.
 Do not bypass native source/artifact receipt checks. If testing an exact release,
 check out its tag before building both components.
 
-Once installed, follow the [Start instructions](../README.md#start).
+Once installed, follow [How to](../README.md#how-to).

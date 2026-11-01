@@ -12,7 +12,7 @@ scope for this MVP. Performance and discovery work are deferred.
 - `crates/cli` (package `thepeer-cli`): `share` host, terminal one-shot offer/Android QR, and `connect` desktop browser gateway.
 - `apps/android-controller`: Android UI, scanner, service and Gradle.
 - `tests/fixtures`: disposable public-data application used for host/phone checks.
-- `tests/host`: terminal QR and JNI process fixtures.
+- `tests/host`: terminal PTY/offer, HTTP restart and JNI process fixtures.
 
 The browser controller/WASM application, relay-status site, transport experiments,
 old native/Java diagnostic/viewer implementations and their obsolete guides/runners
@@ -37,19 +37,19 @@ request-count ceiling.
 
 ## Evidence and next gate
 
-The workspace has 90 passing core tests and four helper tests. The real terminal
-QR → scanner → Java/JNI → HTTP/body/header checks → Stop chain, scanner/state/handoff,
-receipt and application-fixture checks pass. Android-package host compilation
-also succeeds without the core `host` feature. These are host checks, not an APK build.
+Host validation includes core, CLI, terminal PTY/HTTP restart, Android scanner/JNI,
+receipt and application-fixture checks. Test counts from earlier snapshots (90/4 or
+100/5) are not a current total; rerun the suites for a count at a specific commit.
+These host checks do not substitute for a signed APK/device or public-network test.
 
-Before restructuring, the user rebuilt 0.6 and confirmed automatic binding,
-same-Wi-Fi Direct, cellular Relay and Stop on both. Cellular Relay remains noticeably
-slow; no performance diagnosis or universal NAT guarantee is claimed.
-
-The cleaned checkout still requires operator native restaging, APK installation
-and repeat physical checks after code review. The new terminal-to-terminal CLI path
-also needs its host PTY/HTTP restart fixture and a real two-machine check before
-claiming validated behavior.
+Earlier Android physical checks confirmed automatic binding, same-Wi-Fi Direct,
+cellular Relay and Stop on both; cellular Relay was noticeably slow (unmeasured).
+Subsequently, the terminal Direct path was exercised between a macOS client and
+an OrbStack Linux VM, including browsing before and after a dev-server restart;
+the Android QR path was also checked. These are specific checks, not proof of
+universal NAT reachability. Terminal-to-terminal Relay has not been physically
+verified. Repeat physical checks on packaged binaries and a signed APK before
+claiming release validation.
 
 ## Release automation
 
@@ -59,10 +59,9 @@ checksums, and creates a draft release. The installer verifies checksums and
 installs `thepeer` without sudo. Packaging/installer unit tests and workflow
 linting pass locally; the renamed executable also passes the host QR/JNI flow.
 
-The hosted release matrix, Gradle dependency-report task and signing job have not
-been exercised end-to-end. Configure the protected `release` environment and
-signing secrets, run the first tagged workflow, review its notices and test the
-actual assets before publishing. See [release setup](RELEASING.md).
+Do not infer a hosted, published or signed release from local packaging tests.
+Verify the hosted matrix, Gradle dependency-report task, signing job and real
+assets in the release workflow before publishing; see [release setup](RELEASING.md). See [release setup](RELEASING.md).
 
 - [Release gates and proposed commit boundary](RELEASE-READINESS.md)
 - [CLI build/run](CLI.md)

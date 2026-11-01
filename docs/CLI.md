@@ -20,15 +20,11 @@ On a new machine, dependency fetching is a separate operator step:
 `cargo +stable fetch --locked` from the repository root. No CLI or participant
 is started by the build script. `CARGO_TARGET_DIR` can reuse an existing cache.
 
-To prepare Relay with the previously approved participant:
-
-```sh
-./target/build/debug/thepeer share localhost:3002 --relay 207.148.94.42:10000
-```
-
-That command contacts the selected public service. It does **not** operate a relay.
-Do not probe other participants without agreement. Service address and allocated
-relay contact are distinct. Allocation occurs before the QR is published.
+For optional Relay, supply `--relay IP:PORT` to `share` only with a compatible
+service you are authorized to contact. No relay is configured by default. This
+contacts the selected service; it does **not** operate a relay. Service address
+and allocated relay contact are distinct. Allocation occurs before the offer is
+shown. Relay on a terminal-to-terminal connection has not been physically verified.
 
 ## Local-address selection
 
@@ -56,7 +52,7 @@ credentials, paths, scoped IPv6 and HTTPS are unsupported. DNS names must be
 ASCII, without a trailing dot.
 
 - **Resolution:** The CLI resolves a hostname once through the computer's OS,
-  before preparing participants or publishing the QR. Resolution has a five-second
+  before preparing participants or displaying the offer. Resolution has a five-second
   deadline and supports Stop. Empty answers, more than 16 addresses, or any
   non-loopback address reject the whole target.
 - **Session addresses:** Validated addresses are saved for the session, in the
@@ -71,20 +67,25 @@ address family. See the [startup resolution diagram](ARCHITECTURE.md#target-reso
 
 ## Pairing and ownership
 
-Use the matching thepeer Android app or `thepeer connect` from the same release or source revision.
+Use the matching thepeer Android app or `thepeer connect` from the same release or source revision on the browsing computer. Run matching CLI binaries on both computers.
 The sole offer is `wpa2:`. It retains the CLI's bound address, its ordinary
 observation, and a separately allocated relay contact. See [wire policy](ROUTING-OFFER.md).
 Old coordination-bearing offers (flag 1) are rejected, not translated.
 
-The sharing terminal displays a fresh one-shot capability-bearing connection string.
-Run `thepeer connect` in another interactive terminal and paste it at the hidden
-prompt; the CLI prints a loopback browser URL only after authentication. Do not put
-the string in argv, logs, screenshots or files. Select it only over a trusted channel
-(such as your SSH terminal). Press `r` to display the Android QR and `t` for the
-connection string. Redirected output is refused; scan the QR only with the app's
-scanner, not Brave. `q` or Ctrl-C removes the surface and stops the CLI. A selected TLS winner consumes the one-shot offer; start a fresh sharing CLI session
-for another Connect. A dev-server restart is not another Connect: the same healthy
-tunnel and local browser URL remain available for new requests. No grant file or automatic reconnect exists.
+The sharing terminal displays a fresh one-shot capability-bearing connection string
+**by default**. Press `r` to display the Android QR and `t` to return to text;
+both encode the same offer, and the first peer wins. Run `thepeer connect` on the
+browsing computer in an interactive terminal and paste the text at its **hidden**
+prompt; the CLI prints a `http://thepeer-…localhost:PORT` browser URL only after
+authentication. The gateway binds only to loopback. Do not put the offer in argv,
+logs, screenshots or files; copy it only through a trusted channel (such as your
+SSH terminal). Redirected output is refused; scan the QR only with the Android
+app's scanner, not a generic scanner. `q` or Ctrl-C on either CLI ends access;
+Android has a **Stop** button. Start a fresh sharing CLI session for another peer.
+The server may start after pairing or restart: a healthy tunnel and browser URL
+remain available for new requests, but in-flight requests/WebSockets may fail.
+A network/tunnel disconnect does not auto-reconnect; a new pairing needs a fresh
+offer. No grant file exists.
 
 The phone authenticates the intended computer on the **retained TLS connection**
 before sending the grant. Observer connections never receive it. Only classified
@@ -165,6 +166,9 @@ receipt. Missing receipts or changed patch inputs require fresh preparation.
 Do not modify Cargo's cached upstream checkout. Reuse a target directory and disable incremental builds
 rather than accumulating duplicate build trees.
 
-Pre-split physical checks passed Direct on Wi-Fi and Relay on cellular, including
-Stop and automatic binding. Relay slowness is known but unmeasured; optimization
-and discovery changes are deferred until after the MVP.
+Earlier Android physical checks passed Direct on Wi-Fi and Relay on cellular,
+including Stop and automatic binding. A later macOS-to-OrbStack Linux VM Direct
+check exercised browsing before and after a dev-server restart, and the Android
+QR path was checked. Terminal-to-terminal Relay has not been physically verified.
+Relay slowness on the earlier cellular check is unmeasured; no universal NAT
+reachability is claimed.

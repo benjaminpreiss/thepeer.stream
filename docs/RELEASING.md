@@ -53,15 +53,18 @@ Commit/review the complete source, workflow, packaging scripts and `licenses/`
 notices first. Then, from that clean reviewed commit:
 
 ```sh
-git tag -a v0.1.0 -m 'thepeer.stream v0.1.0'
-git push origin v0.1.0
-gh workflow run release.yaml --repo benjaminpreiss/thepeer.stream --ref v0.1.0 -f android_version_code=7
+tag=vX.Y.Z-rc.N       # replace with the actual new version tag
+git tag -a "$tag" -m "thepeer.stream $tag"
+git push origin "$tag"
+gh workflow run release.yaml --repo benjaminpreiss/thepeer.stream --ref "$tag" -f android_version_code=CODE # replace CODE with a new integer
 ```
 
-Choose your actual version tag and a version code greater than every previously
-published Android code; `7` is only the first example. The APK version name comes
-from the tag without `v`. Tags with a suffix, such as `v0.1.0-rc.1`, create prerelease
-drafts. Branch dispatches, malformed versions and invalid version codes are rejected.
+Choose your actual version tag and a version code greater than **every installed
+build that must be upgradable**, including any installed RC; a later stable APK
+must have a higher code than that RC. `CODE` is a placeholder, not a current code.
+The APK version name comes from the tag without `v`. Tags with an `-rc.N` suffix
+create prerelease drafts. Branch dispatches, malformed versions and invalid
+version codes are rejected.
 The workflow verifies the tag still points at the built commit before creating the draft.
 Do not move a released tag; make a new version.
 
@@ -90,10 +93,12 @@ of dependency names. Review them and supplement missing texts/NOTICE obligations
 before publication. Collection is not automatic legal certification.
 
 Before publishing, verify checksums, inspect the bundle for unintended/private
-contents, run the helper on each supported OS/architecture and repeat physical
-Wi-Fi Direct, cellular Relay (with an authorized participant) and Stop tests on
-the signed APK. Verify that an upgrade preserves the signing identity and uses a
-higher version code. macOS binaries are not notarized; checksums are not signatures
+contents, run matching CLI binaries on each supported OS/architecture and repeat
+physical Direct and Stop tests on the signed APK. Test explicitly configured Relay
+with an authorized participant; terminal-to-terminal Relay is not yet physically
+verified. Test `share` / `connect` on two computers, including browser access after
+a dev-server restart. Verify that an upgrade preserves the signing identity and
+uses a higher version code. macOS binaries are not notarized; checksums are not signatures
 or protection against a compromised publisher. The GitHub-hosted build matrix and
 signing job must be validated by an actual operator-triggered run before claiming
 release support. See [release readiness](RELEASE-READINESS.md).
@@ -103,14 +108,19 @@ Only then publish the draft manually in GitHub Releases.
 ## Installer behavior
 
 The README's `curl … | sh` command uses `releases/latest`, which excludes drafts
-and prereleases. Until a normal release is published it intentionally fails.
+and prereleases. Until a normal release is published it intentionally fails. Draft
+assets require authenticated access and cannot be fetched by the pinned-version
+curl installer; see [draft downloads](INSTALLING.md#draft-releases-pre-publication-testing).
+To keep an existing stable CLI installed, use a separate `THEPEER_PREFIX` for
+a published prerelease (or the separate draft binary in the installation guide).
 Install a specific published prerelease/version with:
 
 ```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=v0.1.0-rc.1 sh
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=TAG sh
 ```
 
-The script selects OS/architecture, verifies `SHA256SUMS`, extracts only the named
+Replace `TAG` with the actual published prerelease tag. The script selects
+OS/architecture, verifies `SHA256SUMS`, extracts only the named
 helper (not arbitrary archive paths), keeps the archive with its notices, and
 replaces the binary without running it. Default prefix: `~/.local`; override with
 `THEPEER_PREFIX` if needed. It does not use sudo or edit shell startup files.

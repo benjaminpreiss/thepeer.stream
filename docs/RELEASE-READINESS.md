@@ -19,7 +19,8 @@ files or automatic reconnect belong to this MVP. Saorsa stays at 0.37.0, revisio
   to private modules without widening the production API.
 - Android owns JNI, foreground reservation, synchronized token installation and
   sticky Stop. Existing JNI library/symbol names are preserved.
-- `crates/cli` (package `thepeer-cli`, binary `thepeer`) owns terminal/QR UI,
+- `crates/cli` (package `thepeer-cli`, binary `thepeer`) owns `share` text/QR UI,
+  `connect` hidden-prompt pairing and loopback-only desktop browser gateway,
   argument parsing and automatic bind selection. Build overrides use `THEPEER_*`.
 - Per-session browser origins use `thepeer-<32 lowercase hex digits>.localhost`;
   generators, exact validation and fixtures are updated together.
@@ -54,33 +55,36 @@ build/dependency artifacts were moved to `target/retired-local-artifacts/`, not 
 
 Host evidence after restructuring:
 
-- 100 core Rust tests and five CLI bind/argument tests with the three-patch stack.
-- Real helper terminal QR → scanner → Java/JNI → browser HTTP/body/header checks → Stop;
+- Core/CLI host suites with the reviewed patch stack (rerun for current counts).
+- Host PTY/HTTP restart fixtures for `share` / `connect`, and helper terminal QR →
+  scanner → Java/JNI → browser HTTP/body/header checks → Stop;
   preparation cancellation, automatic bind and socket release included.
 - Scanner, 34 presentation and 23 handoff checks; native receipt checks
   (including Node/Gradle input-list parity) and two application-fixture checks.
 - Separate Android-package host compilation without the core `host` feature.
 
-The previous 157-test milestone included retired designs; it is not the current
-count. Retained coverage includes actual forged-signature rejection with a positive
+Historical test milestones included retired designs; none is a current count. Retained coverage includes actual forged-signature rejection with a positive
 control, pin/grant rejection, authorization/Stop races, ingress/admission recovery,
 observer provenance/failure, Direct/Relay HTTP, SSE/WebSocket teardown, and bounded
 resource release. Raw test-only QUIC policy fixtures are not labelled MASQUE tests.
 Validation logs are local artifacts, not release inputs.
 
-The user previously confirmed Wi-Fi Direct, cellular Relay and Stop on both with
-0.6 and automatic binding. **The cleaned checkout still needs an operator native
-build, APK installation and repeat physical checks.** See [handoff](HUMAN-TESTING.md).
-Existing generated JNI artifacts are stale; do not bypass receipt verification.
+Earlier Android checks confirmed Wi-Fi Direct, cellular Relay and Stop on both.
+Later macOS-to-OrbStack Linux VM Direct browsing before and after a dev-server
+restart and the Android QR path were also checked. Terminal-to-terminal Relay
+has **not** been physically verified; none of these checks validates a packaged
+release or universal NAT reachability. Repeat device and asset checks before release;
+see [handoff](HUMAN-TESTING.md). Do not bypass native receipt verification.
 
 Before release:
 
 - Review the implementation and deletions, including newly added files.
-- Configure the `release` environment/signing secrets and complete the first
-  hosted [draft-release workflow](RELEASING.md) run. The matrix builds, Gradle
-  dependency collection and signing have not yet been validated end-to-end.
-- Test the packaged helpers on each supported platform and the signed APK on a
-  phone, not just the source-build fixtures.
+- Verify the hosted [draft-release workflow](RELEASING.md), matrix builds, Gradle
+  dependency collection and signing on real assets. Do not claim a published
+  release from local tests or assume a workflow run has occurred.
+- Test matching packaged CLIs on each supported platform and the signed APK on a
+  phone, not just the source-build fixtures. Test Direct `share` / `connect` and
+  restart behavior; test Relay explicitly with an authorized participant.
 - Complete the operator build/device checks above.
 - Review actual distributed APK/helper dependencies and include required license/
   copyright/NOTICE texts. Cargo metadata alone is not a binary notice bundle;
@@ -93,32 +97,6 @@ NAT64, sustained adversarial fairness/CPU/RSS or global connection-cap claim is 
 A malicious first TLS winner can deny one-shot availability. Relay withdrawal does
 not imply immediate remote reservation/FD reclamation (ADR-011). Performance,
 discovery and additional routing strategies remain post-MVP work.
-
-## Fresh initial commit — review before staging
-
-The intended publication is a new repository with **one initial commit containing
-the reviewed current source, tests, documentation and licenses**, without importing
-the previous Git history. Keep the old Git metadata as a backup outside the
-project before initializing the new repository, or export selected source files
-to a fresh directory. Do not import old Git metadata, ignored build caches,
-local credentials or retired artifacts. Review these groups together:
-
-1. **Complete MVP implementation and obsolete-path removal:** root Cargo files;
-   all three crates and tests; exact transport patches/preparation; host build/test
-   scripts and PTY/QR fixtures; Android activity/service/scanner/state/handoff,
-   manifests/configuration and Java tests; native build/staging/receipt tooling;
-   public application fixtures; supported CI and obsolete workflow removal;
-   relevant ignore rules. Include the root MIT license, planner MIT notice and
-   third-party licensing documentation with the implementation. Removed files
-   must stay absent from the new initial commit.
-2. **Guides and evidence:** README, helper/offer/Android/human-testing/release guides,
-   current status and retained technical research. Keep Andrew
-   Thomas attribution and distinguish pre-split device evidence from host checks.
-
-After code review, derive explicit file allowlists, including every required
-untracked file, and validate the selected tree before its initial commit. Creating
-or publishing the new repository remains an operator action; no history rewrite,
-staging, commit or push has been performed by this cleanup.
 
 ## Licensing
 
