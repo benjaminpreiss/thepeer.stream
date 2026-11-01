@@ -1,0 +1,75 @@
+name: Propose and auto-merge relay NixOS updates
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: relay-nixos-lock-updates
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # Scheduled workflows already run on the default branch. Never publish
+    # updates from a branch supplied by a caller.
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/nix-installer-action@c5a866b6ab867e88becbed4467b93592bce69f8a # v21
+      - name: Refresh locked Nix and compatible Rust dependencies
+        run: |
+          set -euo pipefail
+          nix flake update
+          rustup toolchain install 1.95.0 --profile minimal
+          cargo +1.95.0 update
+          # Only lockfiles may change. The Saorsa git revision is pinned in
+          # Cargo.toml and must not be selected automatically by this job.
+          git diff --exit-code -- Cargo.toml flake.nix
+          git diff --check -- flake.lock Cargo.lock
+      - name: Build candidate before proposing it
+        run: |
+          set -euo pipefail
+          bash deployment/tests/update.sh
+          mkdir -p deployment/generated
+          cp deployment/tests/machine.nix deployment/generated/machine.nix
+          nix build 'path:.#relay' --no-link
+          nix build 'path:.#nixosConfigurations.relay.config.system.build.toplevel' --no-link
+      # GITHUB_TOKEN-created PRs do not trigger pull_request workflows. Use
+      # an installation token from a dedicated App with Contents and PR write.
+      - uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        id: app
+        with:
+          app-id: ${{ vars.RELAY_UPDATE_APP_ID }}
+          private-key: ${{ secrets.RELAY_UPDATE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        id: pr
+        with:
+          token: ${{ steps.app.outputs.token }}
+          base: main
+          branch: automation/relay-nix-lock
+          delete-branch: true
+          add-paths: |
+            flake.lock
+            Cargo.lock
+          commit-message: 'chore(relay): refresh locked dependencies'
+          title: 'chore(relay): refresh locked dependencies'
+          body: |
+            Automated Nix flake and Cargo lock refresh. The scheduled workflow
+            built the candidate relay and NixOS closure; PR checks run again.
+            The Saorsa git revision and deployment source are unchanged.
+      - name: Queue auto-merge after required checks
+        if: steps.pr.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+        run: gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --squash --delete-branch
