@@ -31,16 +31,10 @@ For a specific **published** version or published prerelease, set its tag explic
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=TAG sh
 ```
 
-The default installer excludes prereleases and drafts; an explicit version supports
-published prereleases, **not drafts**. To test a published prerelease without
-replacing a stable installation, set `THEPEER_PREFIX` to a separate directory:
-
-```sh
-curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/benjaminpreiss/thepeer.stream/main/scripts/install.sh | THEPEER_VERSION=TAG THEPEER_PREFIX="$HOME/thepeer-prerelease" sh
-"$HOME/thepeer-prerelease/bin/thepeer" --help
-```
-
-Run that binary explicitly for both `share` and `connect` during the test.
+The default installer excludes prereleases and drafts. Pinning a published
+prerelease installs it normally; drafts require authenticated downloads. To keep
+an existing stable CLI, set `THEPEER_PREFIX` to another directory and run that
+binary explicitly on both computers.
 
 ### Android app
 

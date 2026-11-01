@@ -1,13 +1,11 @@
 # Target routing offer
 
-The sharing CLI, connecting CLI and Android app accept only **`wpa2:`**, not
-legacy `wpr1:`, `wpa1:` or `wpt1:` formats. Use matching binaries/app from one
-release or source revision; older decoders reject newer flags. No old format is
-translated.
+The sharing CLI, connecting CLI and Android app use the **`wpa2:`** offer.
+Pair with matching binaries/app from the same release or source revision.
 
 Implementation: `crates/tunnel-core/src/route_offer.rs`, exposed through
 `peer_route::Offer::{encode,decode}`. JNI and the desktop connecting CLI use `peer_route::connect`, the sole
-Direct/Relay entry point. The historical three-route adapter has been removed.
+Direct/Relay entry point.
 
 ## Interface and ownership
 

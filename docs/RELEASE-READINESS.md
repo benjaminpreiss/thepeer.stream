@@ -53,28 +53,11 @@ build/dependency artifacts were moved to `target/retired-local-artifacts/`, not 
 
 ## Evidence and remaining gates
 
-Host evidence after restructuring:
-
-- Core/CLI host suites with the reviewed patch stack (rerun for current counts).
-- Host PTY/HTTP restart fixtures for `share` / `connect`, and helper terminal QR →
-  scanner → Java/JNI → browser HTTP/body/header checks → Stop;
-  preparation cancellation, automatic bind and socket release included.
-- Scanner, 34 presentation and 23 handoff checks; native receipt checks
-  (including Node/Gradle input-list parity) and two application-fixture checks.
-- Separate Android-package host compilation without the core `host` feature.
-
-Historical test milestones included retired designs; none is a current count. Retained coverage includes actual forged-signature rejection with a positive
-control, pin/grant rejection, authorization/Stop races, ingress/admission recovery,
-observer provenance/failure, Direct/Relay HTTP, SSE/WebSocket teardown, and bounded
-resource release. Raw test-only QUIC policy fixtures are not labelled MASQUE tests.
-Validation logs are local artifacts, not release inputs.
-
-Earlier Android checks confirmed Wi-Fi Direct, cellular Relay and Stop on both.
-Later macOS-to-OrbStack Linux VM Direct browsing before and after a dev-server
-restart and the Android QR path were also checked. Terminal-to-terminal Relay
-has **not** been physically verified; none of these checks validates a packaged
-release or universal NAT reachability. Repeat device and asset checks before release;
-see [handoff](HUMAN-TESTING.md). Do not bypass native receipt verification.
+See [validation history](../CHANGELOG.md) for build-specific checks and the
+[physical testing protocol](HUMAN-TESTING.md) for repeatable device checks.
+Host fixtures do not validate packaged binaries or the signed APK; test counts
+must be obtained from a run at the release commit. Do not bypass native receipt
+verification.
 
 Before release:
 

@@ -23,7 +23,7 @@ Post-quantum-secure, peer-to-peer access to a localhost web app from another com
 ## Roadmap
 
 - [x] Open a computer’s local web application in an Android phone’s browser.
-- [x] Open a computer’s localhost web app in another computer’s browser via `share` / `connect`.
+- [x] Terminal-to-terminal tunneling for localhost web apps (`share` / `connect`).
 - [ ] iOS support.
 - [ ] Operate a community-funded relay.
 - [ ] Explore remote shell and other scoped protocols (not part of the web-app tunnel).
@@ -73,22 +73,22 @@ No relay is configured by default.
 
 ### Open it on your phone
 
-The sharing terminal shows the text offer by default. Press `r` to show its QR
-and `t` to return to text. In the Android app, tap **Connect** and scan with its
-in-app scanner. The web app opens in your phone’s browser. The QR and text encode
-the **same one-shot offer**: the first peer to connect wins, so start a new sharing
-session for a second peer.
+The sharing terminal's keyboard shortcuts switch between the connection string
+and its QR. In the Android app, tap **Connect** and scan the QR. The app opens
+the web app in your phone's browser. See [CLI pairing](docs/CLI.md#pairing-and-ownership).
 
 ### Open it on another computer
 
-Install the matching CLI version on that computer, run `thepeer connect`, and
-paste the sharing terminal’s connection string at the hidden prompt (not in a
-command). Open the printed loopback-only URL in that computer’s browser.
+Use the matching CLI version on the browsing computer:
 
-You can pair before the web server starts. Both CLIs stay open across dev-server
-restarts; new requests work when the server returns, but in-flight requests or
-WebSockets may fail. Stop either CLI with Ctrl-C (or tap **Stop** on Android).
-A broken tunnel does not reconnect automatically; pair again with a fresh offer.
+```sh
+thepeer connect
+```
+
+Paste the sharing terminal's connection string at the hidden prompt. Open the
+printed local URL in that computer's browser. See [CLI pairing and Stop](docs/CLI.md#pairing-and-ownership)
+for session behavior and [source-build instructions](docs/BUILDING.md#4-open-the-app)
+for a runnable example.
 
 ## Features
 
@@ -113,7 +113,7 @@ tests/fixtures/          Disposable localhost application for host/phone checks
 - [Build/run the CLI](docs/CLI.md)
 - [Create a draft release](docs/RELEASING.md)
 - [Build the Android app](apps/android-controller/README.md)
-- [Validation status and known limitations](docs/STATUS.md)
+- [Current status](docs/STATUS.md) and [validation history](CHANGELOG.md)
 - [Physical testing](docs/HUMAN-TESTING.md)
 - [Offer and routing policy](docs/ROUTING-OFFER.md)
 - [Release readiness](docs/RELEASE-READINESS.md)

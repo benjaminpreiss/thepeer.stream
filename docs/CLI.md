@@ -6,25 +6,32 @@ HTTP policy and cleanup live in `crates/tunnel-core`; JNI lives in
 
 ## Build and run
 
-With Rust, the pinned dependencies and native build prerequisites already cached:
+Build from the repository root (see [prerequisites](BUILDING.md#prerequisites)):
 
 ```sh
 bash scripts/build-helper.sh
-node tests/fixtures/application-app.mjs 3002
-# In another interactive terminal:
-./target/build/debug/thepeer share localhost:3002
 ```
 
-The build is locked/offline and applies the exact reviewed transport patch stack.
-On a new machine, dependency fetching is a separate operator step:
-`cargo +stable fetch --locked` from the repository root. No CLI or participant
-is started by the build script. `CARGO_TARGET_DIR` can reuse an existing cache.
+Try a tiny localhost web app with an editable textbox. In a second terminal:
 
-For optional Relay, supply `--relay IP:PORT` to `share` only with a compatible
-service you are authorized to contact. No relay is configured by default. This
-contacts the selected service; it does **not** operate a relay. Service address
-and allocated relay contact are distinct. Allocation occurs before the offer is
-shown. Relay on a terminal-to-terminal connection has not been physically verified.
+```sh
+node -e '
+  require("node:http").createServer((_req, res) => {
+    res.setHeader("Content-Type", "text/html");
+    res.end(`<input id="message" placeholder="Type here"><output id="echo"></output>
+      <script>message.oninput=()=>echo.value=message.value</script>`);
+  }).listen(3002, "127.0.0.1");
+'
+```
+
+In a third interactive terminal, run `./target/build/debug/thepeer share localhost:3002`.
+For the full test app instead, run `node tests/fixtures/application-app.mjs 3002`.
+The build uses locked dependencies and reviewed transport patches. See
+[build instructions](BUILDING.md#1-clone-and-fetch-dependencies) for initial fetching.
+
+**Optional Relay:** Supply `--relay IP:PORT` to `share` only for a compatible
+participant you have permission to use. Direct is tried first; there is no
+default relay. See [validation history](../CHANGELOG.md) for tested routes.
 
 ## Local-address selection
 
@@ -67,25 +74,26 @@ address family. See the [startup resolution diagram](ARCHITECTURE.md#target-reso
 
 ## Pairing and ownership
 
-Use the matching thepeer Android app or `thepeer connect` from the same release or source revision on the browsing computer. Run matching CLI binaries on both computers.
-The sole offer is `wpa2:`. It retains the CLI's bound address, its ordinary
-observation, and a separately allocated relay contact. See [wire policy](ROUTING-OFFER.md).
-Old coordination-bearing offers (flag 1) are rejected, not translated.
+Use matching CLI binaries on both computers, or a matching Android app. The
+sharing terminal displays text by default; `r` shows its QR and `t` returns to
+text. Both encode the **same one-shot offer**. The first peer to connect wins.
 
-The sharing terminal displays a fresh one-shot capability-bearing connection string
-**by default**. Press `r` to display the Android QR and `t` to return to text;
-both encode the same offer, and the first peer wins. Run `thepeer connect` on the
-browsing computer in an interactive terminal and paste the text at its **hidden**
-prompt; the CLI prints a `http://thepeer-…localhost:PORT` browser URL only after
-authentication. The gateway binds only to loopback. Do not put the offer in argv,
-logs, screenshots or files; copy it only through a trusted channel (such as your
-SSH terminal). Redirected output is refused; scan the QR only with the Android
-app's scanner, not a generic scanner. `q` or Ctrl-C on either CLI ends access;
-Android has a **Stop** button. Start a fresh sharing CLI session for another peer.
-The server may start after pairing or restart: a healthy tunnel and browser URL
-remain available for new requests, but in-flight requests/WebSockets may fail.
-A network/tunnel disconnect does not auto-reconnect; a new pairing needs a fresh
-offer. No grant file exists.
+| Browser device | Pair | Open |
+| --- | --- | --- |
+| Computer | Run `thepeer connect`; paste the offer at the hidden prompt | Open the printed `http://thepeer-<nonce>.localhost:PORT` URL locally |
+| Android | Tap **Connect** and scan with the in-app scanner | The app opens the browser |
+
+The desktop browser gateway binds only to loopback. Keep the offer out of argv,
+logs, files and screenshots; transfer text only via a trusted terminal. Redirected
+CLI output is refused. The offer carries a grant and pin; see [wire policy](ROUTING-OFFER.md).
+
+**Stop:** `q` or Ctrl-C on the sharing CLI, Ctrl-C on the connecting CLI, or
+**Stop** in Android. Pair again with a fresh sharing offer after a disconnect;
+there is no automatic reconnect.
+
+**Server restarts:** You can pair before starting the web server. The healthy
+tunnel survives server restarts and serves new requests when it returns;
+in-flight HTTP requests or WebSockets may fail.
 
 The phone authenticates the intended computer on the **retained TLS connection**
 before sending the grant. Observer connections never receive it. Only classified
@@ -166,9 +174,4 @@ receipt. Missing receipts or changed patch inputs require fresh preparation.
 Do not modify Cargo's cached upstream checkout. Reuse a target directory and disable incremental builds
 rather than accumulating duplicate build trees.
 
-Earlier Android physical checks passed Direct on Wi-Fi and Relay on cellular,
-including Stop and automatic binding. A later macOS-to-OrbStack Linux VM Direct
-check exercised browsing before and after a dev-server restart, and the Android
-QR path was checked. Terminal-to-terminal Relay has not been physically verified.
-Relay slowness on the earlier cellular check is unmeasured; no universal NAT
-reachability is claimed.
+See [validation history](../CHANGELOG.md) for physical checks and remaining gates.

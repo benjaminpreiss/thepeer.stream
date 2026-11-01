@@ -59,14 +59,13 @@ git push origin "$tag"
 gh workflow run release.yaml --repo benjaminpreiss/thepeer.stream --ref "$tag" -f android_version_code=CODE # replace CODE with a new integer
 ```
 
-Choose your actual version tag and a version code greater than **every installed
-build that must be upgradable**, including any installed RC; a later stable APK
-must have a higher code than that RC. `CODE` is a placeholder, not a current code.
-The APK version name comes from the tag without `v`. Tags with an `-rc.N` suffix
-create prerelease drafts. Branch dispatches, malformed versions and invalid
-version codes are rejected.
-The workflow verifies the tag still points at the built commit before creating the draft.
-Do not move a released tag; make a new version.
+Before running the commands:
+
+- Replace `tag` with a new version tag. An `-rc.N` suffix creates a prerelease draft.
+- Replace `CODE` with an integer above every installed Android build that must be
+  upgradable. A stable APK must use a higher code than any installed RC.
+- Review the tagged commit. The workflow rejects invalid inputs and checks that
+  the tag still points to the built commit. Create a new tag for a new release.
 
 The Actions UI can also run **Draft release**, selecting the tag and entering the
 version code. Approve protected-environment jobs when prompted. Signing and draft
@@ -92,18 +91,21 @@ Android bundles include resolved POMs and embedded AAR/JAR notices, not just a l
 of dependency names. Review them and supplement missing texts/NOTICE obligations
 before publication. Collection is not automatic legal certification.
 
-Before publishing, verify checksums, inspect the bundle for unintended/private
-contents, run matching CLI binaries on each supported OS/architecture and repeat
-physical Direct and Stop tests on the signed APK. Test explicitly configured Relay
-with an authorized participant; terminal-to-terminal Relay is not yet physically
-verified. Test `share` / `connect` on two computers, including browser access after
-a dev-server restart. Verify that an upgrade preserves the signing identity and
-uses a higher version code. macOS binaries are not notarized; checksums are not signatures
-or protection against a compromised publisher. The GitHub-hosted build matrix and
-signing job must be validated by an actual operator-triggered run before claiming
-release support. See [release readiness](RELEASE-READINESS.md).
+Before publishing the draft, check:
 
-Only then publish the draft manually in GitHub Releases.
+1. **Assets:** Verify `SHA256SUMS`, inspect bundles for private files and review
+   bundled dependency notices. Checksums do not authenticate the publisher;
+   macOS binaries are not notarized.
+2. **Builds:** Verify the hosted matrix and signing job actually ran. Run matching
+   packaged CLIs on each supported OS/architecture and the signed APK on a phone.
+3. **Connections:** Test Direct and Stop on Android; test `share` / `connect`
+   between two computers, including a dev-server restart. Test Relay with an
+   authorized participant, including the still-unverified desktop Relay route.
+4. **Upgrades:** Confirm the APK retains its signing identity and increments its
+   version code beyond installed RCs.
+
+See [release readiness](RELEASE-READINESS.md). Publish manually in GitHub Releases
+only after these gates pass.
 
 ## Installer behavior
 
@@ -111,8 +113,6 @@ The README's `curl … | sh` command uses `releases/latest`, which excludes draf
 and prereleases. Until a normal release is published it intentionally fails. Draft
 assets require authenticated access and cannot be fetched by the pinned-version
 curl installer; see [draft downloads](INSTALLING.md#draft-releases-pre-publication-testing).
-To keep an existing stable CLI installed, use a separate `THEPEER_PREFIX` for
-a published prerelease (or the separate draft binary in the installation guide).
 Install a specific published prerelease/version with:
 
 ```sh
