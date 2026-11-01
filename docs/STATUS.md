@@ -3,7 +3,7 @@
 The CLI shares one localhost web app with a matching desktop CLI or Android app.
 The browsing device opens a local browser URL through a loopback gateway. The
 sharing CLI owns the fixed target; the first peer consumes its one-shot offer.
-See [features and roadmap](../README.md#features) and [pairing](CLI.md#pairing-and-ownership).
+See [features and roadmap](../README.md#features) and [pairing](CLI.md#connect-from-another-computer).
 
 ## Components
 
@@ -20,7 +20,7 @@ route fallback. Saorsa 0.37.0 is pinned at
 
 ## Evidence and release gate
 
-See [validation history](../CHANGELOG.md) for checks tied to specific builds and
+See [validation history](VALIDATION.md) for checks tied to specific builds and
 unverified routes. Run the host suites in [BUILDING.md](BUILDING.md#tests) for
 current results; snapshot test counts are not a release claim.
 

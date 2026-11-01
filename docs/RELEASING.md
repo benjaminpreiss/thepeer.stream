@@ -112,7 +112,7 @@ only after these gates pass.
 The README's `curl … | sh` command uses `releases/latest`, which excludes drafts
 and prereleases. Until a normal release is published it intentionally fails. Draft
 assets require authenticated access and cannot be fetched by the pinned-version
-curl installer; see [draft downloads](INSTALLING.md#draft-releases-pre-publication-testing).
+curl installer; see [draft downloads](INSTALLING.md#test-a-draft-release).
 Install a specific published prerelease/version with:
 
 ```sh

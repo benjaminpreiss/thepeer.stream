@@ -1,110 +1,62 @@
-# Target routing offer
+# Pairing offer and route policy
 
-The sharing CLI, connecting CLI and Android app use the **`wpa2:`** offer.
-Pair with matching binaries/app from the same release or source revision.
+`thepeer share` creates one `wpa2:` offer for a localhost web app. The terminal
+shows its text by default and can display the same offer as an Android QR. A
+matching desktop CLI or Android app can connect; the first peer wins. Pair again
+with a fresh offer after Stop or a tunnel disconnect.
 
-Implementation: `crates/tunnel-core/src/route_offer.rs`, exposed through
-`peer_route::Offer::{encode,decode}`. JNI and the desktop connecting CLI use `peer_route::connect`, the sole
-Direct/Relay entry point.
+## What the offer carries
 
-## Interface and ownership
+- The sharing computer's public-key fingerprint, checked on the **actual retained
+  TLS connection** before the browser peer sends the application grant.
+- A fresh, one-shot application grant.
+- Direct addresses and, if configured, a separate Relay contact and observation
+  service address. Those are route hints, not proof of reachability.
 
-- `offer.encode()` returns zeroizing in-memory text displayed by `share` by default;
-  `r` presents the same one-shot offer as an Android QR, `t` returns to text.
-- `Offer::decode(&str)` performs bounded canonical validation without network,
-  DNS, browser, filesystem or service activity.
-- The browsing peer acquires its own observation from the explicitly offered participant,
-  if present, then plans eligible Direct candidates followed by Relay.
-- Each attempted candidate must authorize the actual sharing computer pin before sending
-  the grant. Only classified no-response advances the plan. Authentication,
-  protocol, observer/bootstrap, family, cancellation and cleanup errors are terminal.
+**Treat text and QR as live credentials.** Transfer text over a trusted terminal
+to `thepeer connect`'s hidden prompt; scan QR with the Android app. Never put an
+offer in argv, files, logs or screenshots. Use matching binaries/apps from one
+release or source revision.
 
-The offer has no Debug, Clone or generic Serialize implementation. Its grant and
-codec packet/text buffers are zeroizing. The caller must clear borrowed input.
-Encoding does not renew a grant or extend the helper's lifetime. Healthy sessions
-have no arbitrary lifetime; scanner expiry is separate.
+## Route selection
 
-**Encoded text and decoded bytes contain a live capability.** Never put them in
-logs, argv, screenshots, files, preferences, saved state or Intents. The sharing
-CLI intentionally displays the one-shot string for transfer over a trusted terminal
-(e.g. an SSH session); the connecting CLI accepts it only at a hidden interactive
-prompt. Clipboard use is a user-controlled risk, not an automatic CLI action. The
-Android QR remains an in-memory scanner handoff. The first peer wins; pair
-again with a fresh offer after Stop or a tunnel disconnect, not a reused QR.
-Malformed offers return only the nonsecret `route-offer-format` stage.
+1. If the offer names an observation service, obtain the browsing peer's
+   address observation. Its failure ends the attempt.
+2. Try eligible local Direct addresses when the peers share a public observation,
+   or when no non-local candidate exists. Then try remaining Direct addresses,
+   deduplicating identical sockets.
+3. If Direct yields **no response**, try the allocated Relay contact when one
+   was explicitly configured. Authentication or protocol failure ends the attempt
+   instead of triggering fallback.
 
-## Wire layout
+`--observer IP:PORT` supplies address observation only. `--relay IP:PORT`
+prepares both observation and a single-carrier MASQUE Relay contact. With both
+options, the explicit observer supplies observation and the configured relay
+supplies forwarding. Local-only use needs no public participant. Shared public IP
+is an imperfect LAN hint; it does not guarantee a route through all NATs.
 
-ASCII `wpa2:` followed by canonical unpadded base64url:
+## Wire format (for compatible clients)
 
-| Offset/order | Bytes | Meaning |
+ASCII `wpa2:` followed by canonical unpadded base64url. The decoded fields are:
+
+| Offset | Bytes | Field |
 | --- | ---: | --- |
 | 0 | 1 | Version `2` |
-| 1 | 1 | Flags: relay `2`, bound address `4`, observer `8`; bit `1` is retired |
-| 2 | 32 | Computer TLS public-key fingerprint |
+| 1 | 1 | Flags: Relay `2`, bound address `4`, observer `8` |
+| 2 | 32 | Sharing computer TLS key fingerprint |
 | 34 | 32 | Application grant |
-| 66 | variable | Primary Direct hint: observed address when a participant is used, otherwise bind |
-| next, if flag 2 | variable | Computer's allocated MASQUE relay contact |
-| next, if flag 4 | variable | Computer's original bound socket, retained alongside the observation |
-| next, if flag 8 | variable | Ordinary participant service address used for observations |
+| 66 | variable | Primary Direct hint (observed address, otherwise bound address) |
+| next, flag 2 | variable | Allocated Relay contact |
+| next, flag 4 | variable | Original bound socket |
+| next, flag 8 | variable | Observation service address |
 
-Each address is family byte `4`/`6`, four/sixteen IP octets, then a nonzero
-big-endian two-byte port. No DNS or interface scope/flow metadata is encoded.
-At most four records: **73–142 decoded bytes; 103–195 text bytes**, including prefix.
-Java, JNI and native decoder bounds agree. Unknown flags, missing records and trailing
-bytes fail closed. Coordination-bearing offers (bit `1`) are rejected. Other
-supported flag subsets remain ordinary `wpa2:` layouts, not a legacy decoder branch.
+An address is a family byte (`4` or `6`), four or sixteen IP octets and a
+nonzero two-byte port. The offer holds at most four records: **73–142 decoded
+bytes / 103–195 text bytes**, including the prefix. The decoder rejects unknown
+unsupported flags, missing/trailing records, unusable addresses and noncanonical text before
+network activity. The grant and encoded text are zeroized in memory.
 
-All hints, even unused ones, reject unspecified/multicast/broadcast addresses,
-zero ports, IPv4-mapped IPv6, IPv6 link-local addresses, and nonzero scope/flow metadata.
-Private and loopback addresses remain representable. Structure is not proof of
-reachability or authority. Mixed families are representable; a selected operation
-must match the browsing peer's explicitly selected family. No NAT64 synthesis or automatic
-family switch is added.
-
-## Address roles and planning
-
-The helper retains **both** its original bound socket and the participant's
-observation of that same ordinary UDP endpoint. An explicit `--observer` supplies
-the observation preferentially; otherwise the configured relay service does.
-The separately allocated relay contact is never substituted for an observation.
-
-With an observer hint, the browsing peer opens a client-only ordinary connection and reads
-that retained connection's observed address. It fully retires this observation
-endpoint/runtime before application attempts. Only the observed **IP** is used as
-context; its UDP port is not advertised or used as the browsing peer's later dial socket.
-Different NAT mappings/public-IP pools can therefore make the hint inaccurate.
-
-The planner adapts Saorsa-core's conservative shared-WAN rule:
-
-1. Try local-scope Direct candidates when the two ordinary observations share a
-   non-local IP, or when no non-local Direct/Relay alternative exists.
-2. Try the other Direct candidates, deduplicating identical Direct socket addresses.
-3. Try the prepared relay contact, preserving its separate route provenance.
-
-Shared public IP is only a hint: CGNAT, segmentation and changing mappings can cause
-false positives or negatives. No matching-subnet guess is added. With no participant,
-local-only use needs no public bootstrap. **With an explicitly offered observer,
-its failure is terminal even if a LAN route might otherwise work.** Automatic
-participant discovery and observer failover remain separate future work.
-
-No grant is sent to the observer. Every application candidate gets its own owned
-endpoint/runtime, retired before advancing. Coordinated punching is not a step in
-this production plan. No route-latency race or live relay-to-Direct upgrade is added.
-
-## Evidence
-
-Host checks include planner checks, layout/truncation and retired-flag rejection,
-actual decoded-offer Direct HTTP, observer→Relay HTTP/Stop, observer Stop/drop,
-admission/authorization races, forged-signature positive control and resource release.
-Earlier test counts included retired designs and are not a current suite count;
-rerun tests at the target revision.
-
-The real helper terminal QR→scanner→Java/JNI→Direct HTTP/body/header checks→Stop suite also
-passed. Validation logs are local artifacts, not release inputs.
-
-Earlier Android checks confirmed Wi-Fi Direct, cellular Relay and Stop; later
-macOS-to-OrbStack Linux VM Direct browsing before/after a dev-server restart and
-the Android QR path were checked. Terminal-to-terminal Relay is still unverified.
-None proves a packaged release or universal NAT reachability. Repeat checks; see
-[human testing](HUMAN-TESTING.md).
+The implementation lives in [`route_offer.rs`](../crates/tunnel-core/src/route_offer.rs)
+and the planner in [`route_plan.rs`](../crates/tunnel-core/src/route_plan.rs).
+See [validation](VALIDATION.md) for checked routes and [architecture](ARCHITECTURE.md)
+for the full connection flow.

@@ -75,7 +75,7 @@ No relay is configured by default.
 
 The sharing terminal's keyboard shortcuts switch between the connection string
 and its QR. In the Android app, tap **Connect** and scan the QR. The app opens
-the web app in your phone's browser. See [CLI pairing](docs/CLI.md#pairing-and-ownership).
+the web app in your phone's browser. See [CLI pairing](docs/CLI.md).
 
 ### Open it on another computer
 
@@ -86,7 +86,7 @@ thepeer connect
 ```
 
 Paste the sharing terminal's connection string at the hidden prompt. Open the
-printed local URL in that computer's browser. See [CLI pairing and Stop](docs/CLI.md#pairing-and-ownership)
+printed local URL in that computer's browser. See [CLI pairing and Stop](docs/CLI.md)
 for session behavior and [source-build instructions](docs/BUILDING.md#4-open-the-app)
 for a runnable example.
 
@@ -113,7 +113,7 @@ tests/fixtures/          Disposable localhost application for host/phone checks
 - [Build/run the CLI](docs/CLI.md)
 - [Create a draft release](docs/RELEASING.md)
 - [Build the Android app](apps/android-controller/README.md)
-- [Current status](docs/STATUS.md) and [validation history](CHANGELOG.md)
+- [Current status](docs/STATUS.md) and [validation history](docs/VALIDATION.md)
 - [Physical testing](docs/HUMAN-TESTING.md)
 - [Offer and routing policy](docs/ROUTING-OFFER.md)
 - [Release readiness](docs/RELEASE-READINESS.md)

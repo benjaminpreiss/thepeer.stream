@@ -53,7 +53,7 @@ build/dependency artifacts were moved to `target/retired-local-artifacts/`, not 
 
 ## Evidence and remaining gates
 
-See [validation history](../CHANGELOG.md) for build-specific checks and the
+See [validation history](VALIDATION.md) for build-specific checks and the
 [physical testing protocol](HUMAN-TESTING.md) for repeatable device checks.
 Host fixtures do not validate packaged binaries or the signed APK; test counts
 must be obtained from a run at the release commit. Do not bypass native receipt

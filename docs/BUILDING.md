@@ -104,7 +104,7 @@ machines may differ.
 ## 4. Open the app
 
 Use the same release or source revision on both devices. Start on the same network
-for Direct; see [Relay options](CLI.md#build-and-run) for an explicitly configured
+for Direct; see [Relay options](CLI.md#options-and-behavior) for an explicitly configured
 participant.
 
 ### Another computer (including an SSH host sharing to a laptop)

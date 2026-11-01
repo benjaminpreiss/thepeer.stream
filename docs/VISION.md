@@ -1,15 +1,21 @@
-# Browser access to a localhost web app
+# A localhost web app, wherever you browse
 
-A person shares one explicitly selected localhost web app from a computer.
-A matching desktop CLI or Android app pairs with a one-shot offer and opens the
-app in the browsing device's normal browser through a local HTTP gateway.
-The sharing CLI owns the target; the browsing client owns its encrypted Saorsa
-connection and browser gateway. The user controls the session with Stop.
+Share a web app running on one computer with a browser on another computer or
+an Android phone. Pair the devices deliberately with a one-shot offer and stay
+in control with Stop.
 
-The route policy tries eligible Direct candidates, followed by an explicitly
-configured single-carrier MASQUE Relay. Authentication checks the sharing
-computer's key on the retained connection before sending the grant. The browser
-gateway applies bounded HTTP policy and binds to loopback.
+## Properties
 
-See [current features](../README.md#features), [CLI pairing](CLI.md#pairing-and-ownership)
-and [validation history](../CHANGELOG.md).
+- **Peer-to-peer:** The browsing device connects to the sharing computer through
+  an authenticated, encrypted tunnel.
+- **Post-quantum secure:** Peer authentication and the transport use the project's
+  post-quantum cryptographic policy.
+- **Direct when possible:** Eligible direct paths are preferred. An explicitly
+  configured Relay provides a path through more difficult network topologies.
+- **Local by design:** Sharing is scoped to one chosen localhost web app; the
+  browsing device opens it through its own loopback browser gateway.
+- **Two ways to browse:** Pair a computer with another computer using the CLI,
+  or pair a computer with an Android phone using its app.
+
+See [features](../README.md#features), [usage](CLI.md) and
+[validation](VALIDATION.md).
