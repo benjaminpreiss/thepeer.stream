@@ -35,8 +35,11 @@ relaxation of deployment policy is outside automated lockfile updates.
 3. Enable repository **Allow auto-merge** (Settings → General → Pull requests).
    Configure **classic branch protection** for `main` with required checks
    `Direct/Relay core, desktop helper and host JNI` and `Build relay and
-   NixOS` (verify exact names in GitHub's status-check selector). Do not grant
-   the App bypass, force-push or direct-main rights. Ruleset-only checks are
+   NixOS` (verify exact names in GitHub's status-check selector). The shared
+   workflow's comma-delimited `required-checks` input can only name `Build
+   relay and NixOS`: the existing native-check name contains commas. GitHub
+   branch protection **must still require both**; auto-merge waits for both.
+   Do not grant the App bypass, force-push or direct-main rights. Ruleset-only checks are
    insufficient for this pinned workflow's current branch-protection audit.
    Mandatory human approval would block unattended dependency updates.
 4. After the handoff workflow files are on `main`, manually dispatch

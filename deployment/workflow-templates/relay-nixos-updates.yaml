@@ -23,7 +23,10 @@ jobs:
       test-command: 'bash deployment/tests/integration.sh'
       # Exact job/check names must also be required by classic branch protection;
       # the shared workflow refuses to auto-merge if that cannot be verified.
-      required-checks: 'Direct/Relay core, desktop helper and host JNI,Build relay and NixOS'
+      # The existing native-check job contains commas in its name, so this
+      # comma-delimited audit names only the relay check. Branch protection
+      # still requires BOTH jobs; GitHub auto-merge waits for all of them.
+      required-checks: 'Build relay and NixOS'
     secrets:
       APP_ID: ${{ secrets.RELAY_UPDATE_APP_ID }}
       APP_PRIVATE_KEY: ${{ secrets.RELAY_UPDATE_APP_PRIVATE_KEY }}
