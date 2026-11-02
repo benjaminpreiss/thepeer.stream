@@ -109,6 +109,7 @@ tests/fixtures/          Disposable localhost application for host/phone checks
 ```
 
 - [Architecture: components, connection flow and Saorsa](docs/ARCHITECTURE.md)
+- [Deploy a self-updating NixOS MASQUE relay](deployment/README.md)
 - [Build from source](docs/BUILDING.md)
 - [Build/run the CLI](docs/CLI.md)
 - [Create a draft release](docs/RELEASING.md)

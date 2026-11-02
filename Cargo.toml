@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/tunnel-core", "crates/tunnel-android", "crates/cli"]
+members = ["crates/tunnel-core", "crates/tunnel-android", "crates/cli", "crates/relay"]
 resolver = "2"
 
 [workspace.package]
@@ -9,7 +9,7 @@ publish = false
 
 [workspace.dependencies]
 saorsa-transport = { git = "https://github.com/WithAutonomi/saorsa-transport", rev = "e2f08388088313c82cac393afa6ca27b9ce00516", default-features = false, features = ["native"] }
-tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util", "sync"] }
+tokio = { version = "1", features = ["rt", "macros", "time", "net", "io-util", "sync", "signal"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 zeroize = { version = "1", features = ["serde"] }
 

@@ -152,7 +152,9 @@ All three matter. A reachable address or valid TLS peer alone is not authorizati
 - **0005:** Constructor-installed handshake hooks, including virtual ingress.
 
 Relay socket construction and forwarding use upstream's existing implementation;
-thepeer does not operate a relay service. These three local patches are not claimed
+thepeer clients do not operate a relay service. An optional self-hosted
+[relay deployment](../deployment/README.md) uses the same upstream transport;
+it is not part of client routing or a default public relay. These three local patches are not claimed
 upstream-merged changes. They do not replace upstream cryptography or require remote participants to adopt
 a new wire protocol. Exact hashes, scope and limitations are in the
 [patch documentation](../patches/saorsa-transport/README.md).
