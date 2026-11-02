@@ -1,29 +1,21 @@
-# thepeer.stream: browser access to a computer-localhost application
+# A localhost web app, wherever you browse
 
-The MVP exposes one explicitly configured computer-localhost web application to a
-normal phone browser. An installed Android app—not browser JavaScript—owns the
-Saorsa connection and a fresh local browser origin. The CLI owns the
-fixed target and displays a one-shot pairing QR.
+Share a web app running on one computer with a browser on another computer or
+an Android phone. Pair the devices deliberately with a one-shot offer and stay
+in control with Stop.
 
-The user explicitly connects, scans a trusted helper and can Stop access at any
-time. Authenticate the intended computer on the retained TLS connection before
-sending the grant. Do not persist or log capabilities, reconnect automatically,
-expose arbitrary destinations or impose a healthy-session timer.
+## Properties
 
-Try eligible Direct candidates first, then a prepared single-carrier MASQUE Relay.
-Coordinated punching can enable direct connectivity in additional NAT situations,
-but is deliberately deferred for this release. Shared public IP is only a LAN hint,
-not proof of reachability. No universal NAT or implicit dual-stack/NAT64 claim.
+- **Peer-to-peer:** The browsing device connects to the sharing computer through
+  an authenticated, encrypted tunnel.
+- **Post-quantum secure:** Peer authentication and the transport use the project's
+  post-quantum cryptographic policy.
+- **Direct when possible:** Eligible direct paths are preferred. An explicitly
+  configured Relay provides a path through more difficult network topologies.
+- **Local by design:** Sharing is scoped to one chosen localhost web app; the
+  browsing device opens it through its own loopback browser gateway.
+- **Two ways to browse:** Pair a computer with another computer using the CLI,
+  or pair a computer with an Android phone using its app.
 
-Use upstream transport functionality with the reviewed pinned patches rather than
-build another traversal stack. Clients do not operate a relay, enable UPnP or
-advertise unwanted services. Relay performance and participant discovery are later
-work, not reasons to keep the retired browser-owned controller or public-relay
-prototype in the product tree.
-
-The desktop `thepeer connect` client uses the same one-shot authenticated offer and
-bounded HTTP gateway to browse a single explicitly configured localhost app. It does
-not expose an unrestricted TCP proxy or shell. Other scoped protocols such as SSH
-remain future possibilities.
-
-See [current evidence](STATUS.md) and [release gates](RELEASE-READINESS.md).
+See [features](../README.md#features), [usage](CLI.md) and
+[validation](VALIDATION.md).

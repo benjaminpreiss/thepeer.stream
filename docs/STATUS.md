@@ -1,73 +1,29 @@
-# Current project status
+# Current status
 
-## Product and layout
+The CLI shares one localhost web app with a matching desktop CLI or Android app.
+The browsing device opens a local browser URL through a loopback gateway. The
+sharing CLI owns the fixed target; the first peer consumes its one-shot offer.
+See [features and roadmap](../README.md#features) and [pairing](CLI.md#connect-from-another-computer).
 
-Android or a second desktop CLI owns a tunnel from a normal browser to one fixed
-computer-localhost application. The route is **eligible Direct → single-carrier MASQUE Relay**.
-Coordinated punching, automatic reconnect and operating our own relay are out of
-scope for this MVP. Performance and discovery work are deferred.
+## Components
 
-- `crates/tunnel-core`: offers, planning, retained-peer authentication, HTTP and cleanup.
-- `crates/tunnel-android`: JNI, foreground reservation and sticky Stop.
-- `crates/cli` (package `thepeer-cli`): `share` host, terminal one-shot offer/Android QR, and `connect` desktop browser gateway.
-- `apps/android-controller`: Android UI, scanner, service and Gradle.
-- `tests/fixtures`: disposable public-data application used for host/phone checks.
-- `tests/host`: terminal QR and JNI process fixtures.
+- `crates/tunnel-core`: offer, authentication, routing, HTTP and cleanup.
+- `crates/cli`: `share` and `connect`, including the desktop browser gateway.
+- `crates/tunnel-android` and `apps/android-controller`: JNI, scanner and Android session ownership.
+- `tests/fixtures` and `tests/host`: disposable application and process fixtures.
 
-The browser controller/WASM application, relay-status site, transport experiments,
-old native/Java diagnostic/viewer implementations and their obsolete guides/runners
-have been removed—not kept as alternate source trees. Research findings and license
-provenance remain in documentation. The unused `deployment/saorsa-relay/`
-scaffold was also removed; no remote service was changed. Other deployment work
-is untouched.
-Ignored local build/dependency artifacts were preserved under
-`target/retired-local-artifacts/`; they are not source or release inputs.
+The route policy tries eligible Direct candidates first, then an explicitly
+prepared single-carrier MASQUE Relay. Authentication uses the retained TLS
+connection before sending the grant. Only a classified no-response permits
+route fallback. Saorsa 0.37.0 is pinned at
+`e2f08388088313c82cac393afa6ca27b9ce00516` with reviewed patches 0003–0005.
 
-## Invariants
+## Evidence and release gate
 
-Saorsa remains 0.37.0 at `e2f08388088313c82cac393afa6ca27b9ce00516` with unchanged
-reviewed patches 0003–0005. No Cargo-cache edits or transport upgrades.
-The sole `wpa2:` codec rejects retired coordination flag 1 and bounds text to
-195 bytes. Authenticate the intended computer on the retained TLS connection
-before sending the scoped grant. Only classified no-response permits fallback;
-authentication, protocol, input, observation, family, Stop and cleanup errors are
-terminal. Browser origins use `thepeer-<32 lowercase hex digits>.localhost`;
-the nonce still has 128 bits of entropy. No healthy-session lifetime or cumulative
-request-count ceiling.
+See [validation history](VALIDATION.md) for checks tied to specific builds and
+unverified routes. Run the host suites in [BUILDING.md](BUILDING.md#tests) for
+current results; snapshot test counts are not a release claim.
 
-## Evidence and next gate
-
-The workspace has 90 passing core tests and four helper tests. The real terminal
-QR → scanner → Java/JNI → HTTP/body/header checks → Stop chain, scanner/state/handoff,
-receipt and application-fixture checks pass. Android-package host compilation
-also succeeds without the core `host` feature. These are host checks, not an APK build.
-
-Before restructuring, the user rebuilt 0.6 and confirmed automatic binding,
-same-Wi-Fi Direct, cellular Relay and Stop on both. Cellular Relay remains noticeably
-slow; no performance diagnosis or universal NAT guarantee is claimed.
-
-The cleaned checkout still requires operator native restaging, APK installation
-and repeat physical checks after code review. The new terminal-to-terminal CLI path
-also needs its host PTY/HTTP restart fixture and a real two-machine check before
-claiming validated behavior.
-
-## Release automation
-
-A manually dispatched version-tag workflow runs the existing tests, builds
-macOS/Linux helpers and a signed Android APK, collects dependency notices and
-checksums, and creates a draft release. The installer verifies checksums and
-installs `thepeer` without sudo. Packaging/installer unit tests and workflow
-linting pass locally; the renamed executable also passes the host QR/JNI flow.
-
-The hosted release matrix, Gradle dependency-report task and signing job have not
-been exercised end-to-end. Configure the protected `release` environment and
-signing secrets, run the first tagged workflow, review its notices and test the
-actual assets before publishing. See [release setup](RELEASING.md).
-
-- [Release gates and proposed commit boundary](RELEASE-READINESS.md)
-- [CLI build/run](CLI.md)
-- [Offer and route policy](ROUTING-OFFER.md)
-- [Physical test handoff](HUMAN-TESTING.md)
-
-Supported host entry points: `bash scripts/test-native.sh` and, with a JDK and the
-pinned local ZXing jar, `bash apps/android-controller/test-native.sh`.
+A version-tag workflow is designed to create draft assets. Validate its hosted
+matrix, signing, licenses and actual assets before publication. Follow the
+[release gate](RELEASE-READINESS.md) and [physical testing protocol](HUMAN-TESTING.md).
