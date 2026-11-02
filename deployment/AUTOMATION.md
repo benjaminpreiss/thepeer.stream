@@ -18,7 +18,7 @@ relaxation of deployment policy is outside automated lockfile updates.
 
 ## Configure the repository
 
-1. [Open this prefilled GitHub App creation form](https://github.com/settings/apps/new?name=thepeer-relay-lock-updates&description=Automated%20reviewed%20relay%20dependency%20updates&url=https%3A%2F%2Fgithub.com%2Fbenjaminpreiss%2Fthepeer.stream&public=false&webhook_active=false&contents=write&pull_requests=write)
+1. [Open this prefilled GitHub App creation form](https://github.com/settings/apps/new?name=thepeer-relay-lock-updates&description=Automated%20reviewed%20relay%20dependency%20updates&url=https%3A%2F%2Fgithub.com%2Fbenjaminpreiss%2Fthepeer.stream&public=false&webhook_active=false&request_oauth_on_install=false&contents=write&pull_requests=write)
    (or [edit an existing App](https://github.com/settings/apps)). Verify the
    form: private App, webhooks and OAuth-on-install disabled; repository
    **Contents** and **Pull requests** read/write, no Workflows,
