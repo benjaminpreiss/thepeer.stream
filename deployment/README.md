@@ -18,13 +18,15 @@ bash deployment/scripts/check-machine.sh "$PWD" relay generated/record.json
 
 Review `generated/record.json` and `generated/machine.nix` against the provider console: target, **whole disk to erase**, boot mode, NIC/MAC, IPv4 DHCP and SSH public key. Preparation refuses existing private state. Unsupported/ambiguous target settings must be corrected, not guessed. An optional reviewed `generated/facter.json` must contain no secrets; this wrapper does not generate one automatically. Back up `generated/` off-host and check storage/network boot drivers and SSH recovery.
 
-Commit and push the exact branch revision. Within the toolkit's pinned operator shell, run the shared installer; the last argument is our executable relay-specific pre-erase check:
+Commit and push the exact branch revision. Copy the reviewed pre-erase check into the ignored private directory with executable permissions (the committed source remains unchanged), then run the shared installer in the pinned operator shell:
 
 ```bash
+install -m 0700 deployment/scripts/check-machine.sh generated/check-machine.sh
+cmp deployment/scripts/check-machine.sh generated/check-machine.sh
 nix develop --no-write-lock-file "path:$toolkit_dir#operator" --command \
   bash "$toolkit_dir/toolkit/deploy.sh" install generated/record.json "$PWD" \
   "$(git rev-parse HEAD)" generated relay "$(git branch --show-current)" \
-  generated/install-receipt.json - - "$PWD/deployment/scripts/check-machine.sh"
+  generated/install-receipt.json - - "$PWD/generated/check-machine.sh"
 ```
 
 **Only this command invokes Disko/nixos-anywhere and erases the entire chosen disk.** The shared installer checks the exact pushed branch tip and clean checkout, stages/builds, runs the pre-erase check against the **staged** NixOS output, re-probes and requires typing `ERASE /dev/WHOLE_DISK`. It writes a private receipt only after successful installation. If install succeeded but receipt creation failed, inspect through the console; **do not reinstall** to repair it. Never use install as an upgrade.
