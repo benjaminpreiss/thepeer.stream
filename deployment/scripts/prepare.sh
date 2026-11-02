@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Run from a deployment computer. Only x86_64 / IPv4 DHCP is supported.
 set -euo pipefail
-[[ $# == 2 || ( $# == 3 && $3 == --test-deploy ) ]] || {
-  echo 'usage: prepare.sh root@HOST SSH_PUBLIC_KEY_FILE [--test-deploy]' >&2; exit 2;
+[[ $# == 2 ]] || {
+  echo 'usage: prepare.sh root@HOST SSH_PUBLIC_KEY_FILE' >&2; exit 2;
 }
 # shellcheck source=deployment/scripts/toolkit.sh
 source "$(dirname "${BASH_SOURCE[0]}")/toolkit.sh"
@@ -19,8 +19,6 @@ read -r -p 'Confirm target uses IPv4 DHCP (yes/no): ' dhcp
 [[ $dhcp == yes ]] || { echo 'Static/IPv6-only networking is unsupported' >&2; exit 1; }
 read -r kind key _ <"$keyfile"
 [[ $kind == ssh-ed25519 && $key =~ ^[a-zA-Z0-9+/=]+$ ]] || { echo 'Expected Ed25519 public key' >&2; exit 1; }
-auto_update=true
-[[ ${3:-} != --test-deploy ]] || auto_update=false
 umask 077
 mkdir -m 700 "$private"
 bash "$toolkit_dir/toolkit/deploy.sh" discover "$target" "$disk" "$private/record.json"
@@ -38,7 +36,6 @@ cat >"$private/machine.nix" <<EOF
     bootMode = "$boot";
     mac = "$mac";
     sshKey = "$kind $key";
-    autoUpdate = $auto_update;
   };
 }
 EOF

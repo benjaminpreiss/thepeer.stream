@@ -1,10 +1,8 @@
-# Relay-specific policy for the shared, flake-pinned themoss updater.
-{ config, ... }: {
+# Relay-specific paths and cadence; selector is root-owned target state.
+{ ... }: {
   services.themossUpdate = {
     enable = true;
-    timer = config.peerRelay.autoUpdate;
     repository = "/var/lib/thepeer-relay/source";
-    branch = "main";
     machine = "/var/lib/thepeer-relay/private";
     host = "relay";
     state = "/var/lib/thepeer-relay/update";

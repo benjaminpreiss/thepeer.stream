@@ -51,6 +51,22 @@
         "type": "github"
       }
     },
+    "nixpkgs_2": {
+      "locked": {
+        "lastModified": 1767313136,
+        "narHash": "sha256-16KkgfdYqjaeRGBaYsNrhPRRENs0qzkQVUooNHtoy2w=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "ac62194c3917d5f474c1a844b6fd6da2db95077d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-25.05",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "disko": "disko",
@@ -60,18 +76,21 @@
       }
     },
     "themoss": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_2"
+      },
       "locked": {
-        "lastModified": 1793580569,
-        "narHash": "sha256-StlS3dvxmm0mN8c2PnxdMcqPkd340Yko11+py4PDrMs=",
+        "lastModified": 1793587181,
+        "narHash": "sha256-TFTx7JkNO6mpRcT/lrQtULnnoJYyGWxT9UD6HkKrehQ=",
         "owner": "benjaminpreiss",
         "repo": "themoss.net",
-        "rev": "3074f7c386b4a7d8c0b3a2cd2f7f72ef3d1f6768",
+        "rev": "05f25bf2e700deb55c59882d00e781a1e1583d07",
         "type": "github"
       },
       "original": {
         "owner": "benjaminpreiss",
         "repo": "themoss.net",
-        "rev": "3074f7c386b4a7d8c0b3a2cd2f7f72ef3d1f6768",
+        "rev": "05f25bf2e700deb55c59882d00e781a1e1583d07",
         "type": "github"
       }
     }

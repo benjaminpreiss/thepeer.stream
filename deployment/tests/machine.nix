@@ -6,6 +6,5 @@
     bootMode = "uefi";
     mac = "52:54:00:12:34:56";
     sshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG1vY2t0ZXN0LWtleS1ub3QtcmVhbC1rZXBsYWNl";
-    autoUpdate = false; # test candidate must not fetch main
   };
 }
