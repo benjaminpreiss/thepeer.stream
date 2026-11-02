@@ -23,10 +23,9 @@ In a second interactive terminal:
 thepeer share localhost:3002
 ```
 
-The CLI shows the one-shot connection string by default. Press `r` to show the
-same offer as an Android QR; `t` returns to text. The server can also start
-*after* sharing begins. For a richer test page, run
-`node tests/fixtures/application-app.mjs 3002` instead of the Node example.
+The CLI shows the one-shot connection string by default and can display it as
+an Android QR. The server can also start *after* sharing begins. For a richer
+test page, run `node tests/fixtures/application-app.mjs 3002` instead.
 
 ## Connect from another computer
 
@@ -37,15 +36,14 @@ The browser listener binds only to loopback.
 
 ## Connect from Android
 
-Press `r` in the sharing terminal. In the matching Android app, tap **Connect**
-and scan with the app's scanner. The app opens the web page in the phone browser.
+Display the sharing offer as a QR and scan it with the matching Android app's
+scanner. The app opens the web page in the phone browser.
 
 ## Stop and reconnect
 
 The text and QR encode the **same** one-shot offer; the first peer to connect wins.
-Use `q` or Ctrl-C on the sharing terminal, Ctrl-C on the connecting terminal,
-or **Stop** in Android. A tunnel disconnect does not reconnect automatically:
-start a fresh sharing session and pair with a new offer.
+Stop either CLI or use **Stop** in Android. A tunnel disconnect does not
+reconnect automatically: start a fresh sharing session and pair with a new offer.
 
 A healthy tunnel survives dev-server restarts. New requests work when the server
 returns; in-flight HTTP requests and WebSockets may fail during the restart.
