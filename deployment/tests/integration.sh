@@ -5,11 +5,21 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)
 cd "$root"
 source deployment/scripts/toolkit.sh
 # Shared fixtures need a writable copy; the pinned toolkit source is read-only.
-mkdir -p generated
+created_generated=false
+if [[ ! -d generated ]]; then
+  mkdir -m 700 generated
+  created_generated=true
+fi
 [[ ! -e generated/machine.nix ]] || { echo 'Refusing to overwrite private machine config' >&2; exit 1; }
 tmp=$(mktemp -d "$root/generated/integration.XXXXXXXX")
 export TMPDIR="$tmp"
-trap 'chmod -R u+rwX "$tmp"; rm -rf "$tmp"; rm -f "$root/generated/machine.nix"' EXIT
+cleanup() {
+  chmod -R u+rwX "$tmp"
+  rm -rf "$tmp"
+  rm -f "$root/generated/machine.nix"
+  if [[ $created_generated == true ]]; then rmdir "$root/generated"; fi
+}
+trap cleanup EXIT
 cp -R "$toolkit_dir/." "$tmp/toolkit"
 chmod u+w "$tmp/toolkit"
 bash "$tmp/toolkit/tests/test.sh"
