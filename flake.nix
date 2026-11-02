@@ -5,7 +5,7 @@
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
     facter.url = "github:numtide/nixos-facter-modules";
-    themoss.url = "github:benjaminpreiss/themoss.net/bdf91bcd0a36d729e9fed9a28b8ca3c508543160";
+    themoss.url = "github:benjaminpreiss/themoss.net/3074f7c386b4a7d8c0b3a2cd2f7f72ef3d1f6768";
   };
   outputs = inputs@{ nixpkgs, disko, facter, themoss, ... }:
     let
