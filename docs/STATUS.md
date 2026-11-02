@@ -10,7 +10,6 @@ See [features and roadmap](../README.md#features) and [pairing](CLI.md#connect-f
 - `crates/tunnel-core`: offer, authentication, routing, HTTP and cleanup.
 - `crates/cli`: `share` and `connect`, including the desktop browser gateway.
 - `crates/tunnel-android` and `apps/android-controller`: JNI, scanner and Android session ownership.
-- `crates/relay` and `deployment/`: optional Saorsa-compatible NixOS MASQUE relay and self-hosted deployment.
 - `tests/fixtures` and `tests/host`: disposable application and process fixtures.
 
 The route policy tries eligible Direct candidates first, then an explicitly
@@ -18,7 +17,6 @@ prepared single-carrier MASQUE Relay. Authentication uses the retained TLS
 connection before sending the grant. Only a classified no-response permits
 route fallback. Saorsa 0.37.0 is pinned at
 `e2f08388088313c82cac393afa6ca27b9ce00516` with reviewed patches 0003–0005.
-The [relay deployment](../deployment/README.md) has not been validated on a real host.
 
 ## Evidence and release gate
 
