@@ -46,7 +46,14 @@ bash scripts/build-helper.sh
 ```
 
 The executable is `target/build/debug/thepeer` unless you set `CARGO_TARGET_DIR`.
-Start your own localhost HTTP application, or run the disposable test application:
+Start your own localhost HTTP application, or run this minimal server in one terminal
+(no Node dependencies beyond the prerequisite runtime):
+
+```sh
+node -e 'require("node:http").createServer((_req, res) => res.end("hello from localhost\n")).listen(3002, "127.0.0.1")'
+```
+
+For the richer disposable test application instead, run:
 
 ```sh
 node tests/fixtures/application-app.mjs 3002
@@ -58,9 +65,9 @@ In another interactive terminal, from the repository root:
 ./target/build/debug/thepeer share localhost:3002
 ```
 
-It displays a live pairing QR. Do not redirect, save or screenshot it. Keep the
-CLI and target application running. See [CLI options](CLI.md) for
-interface selection and optional relay configuration.
+The sharing CLI shows text by default; `r` shows its QR and `t` returns to text.
+Keep it running, and keep either form of the offer out of files and screenshots.
+See [CLI options](CLI.md) for bind and Relay configuration.
 
 ## 3. Build and install the phone app
 
@@ -94,13 +101,34 @@ Studio installs the debug app without replacing the release app. Updates within
 either ID require the same signing key; debug keys from different development
 machines may differ.
 
-## 4. Connect
+## 4. Open the app
 
-Use the phone app's **Connect** button to scan the terminal QR. If Android asks
-for camera permission, grant it and tap Connect again. The phone app connects and
-opens the tunneled web application in the browser. Start with both devices on the
-same network. Tap **Stop** in the phone app to end access; `q` or Ctrl-C also stops
-the CLI. Restart the CLI to create a fresh QR for another session.
+Use the same release or source revision on both devices. Start on the same network
+for Direct; see [Relay options](CLI.md#options-and-behavior) for an explicitly configured
+participant.
+
+### Another computer (including an SSH host sharing to a laptop)
+
+On the browsing computer, run:
+
+```sh
+./target/build/debug/thepeer connect
+```
+
+Paste the text offer at the **hidden** prompt; open the printed loopback URL in
+that computer's browser. Never pass the offer in a command or log it.
+
+### Android phone
+
+Press `r` on the sharing computer. Tap **Connect** in the Android app and scan
+its QR. If asked for camera access, grant it and tap Connect again.
+
+### End or resume
+
+The first peer wins the one-shot offer. Use Ctrl-C on either CLI or **Stop** on
+Android. The server can start after pairing or restart during a healthy tunnel;
+new requests then work, but in-flight requests/WebSockets may fail. A tunnel
+disconnect requires a fresh `share` session and offer.
 
 ## Tests
 

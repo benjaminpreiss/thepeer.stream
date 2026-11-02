@@ -1,64 +1,11 @@
-# Physical test handoff
+# Physical testing protocol
 
-## What has already worked
+Use this checklist for each candidate release. Record the tag or commit, CLI/APK versions, route and nonsecret outcomes in the [validation history](VALIDATION.md). Do not treat host fixtures or earlier builds as device evidence.
 
-The user rebuilt/restaged **0.6-direct-relay-preview / code 6** and confirmed:
+1. Build [matching CLIs](BUILDING.md) on both computers and restage/install the Android app using [Android build instructions](../apps/android-controller/README.md). Do not bypass native receipt validation.
+2. With a localhost server (see [CLI example](CLI.md#share-from-a-computer)), run `thepeer share localhost:3002` on the host and `thepeer connect` on the browsing computer. Paste the offer at the hidden prompt. Browse the printed loopback URL. Try Direct on the same network first.
+3. Test pairing before starting the server and browse again after restarting it. New requests should work; in-flight requests/WebSockets may fail. Stop either CLI and confirm access ends. A new connection needs a fresh sharing offer.
+4. On Android, use the app's **Connect** scanner for the QR from a fresh sharing session. Check camera permission, navigation, API writes, cookies, SSE/WebSockets, background/foreground and **Stop** (app and notification).
+5. If an operator authorizes a compatible participant, repeat Android and desktop tests with `share ... --relay IP:PORT`, including cellular where available. Record Direct and Relay separately; host fixtures are not physical Relay evidence.
 
-- Same Wi-Fi: Direct works with automatic helper binding.
-- Phone on cellular: single-carrier Relay works.
-- Stop closes browser access on both routes.
-- Cellular Relay is noticeably slow; this is qualitative, not a benchmark.
-
-Those confirmations precede the Rust workspace/legacy cleanup. They must not be
-relabelled as post-refactor device evidence. No Android SDK/NDK build or device
-operation has been performed by the agent during this cleanup.
-
-## Current host checkpoint
-
-The shared core and separate CLI have 100 + 5 passing Rust tests.
-The real helper terminal QR → scanner → Java/JNI → browser HTTP/body/header checks → Stop
-suite passes, including automatic bind and socket release. These are local host
-fixtures, not a physical camera, cellular benchmark or public NAT guarantee.
-
-Current code has one Direct/Relay router, no coordination stage, no legacy offer
-translation and a 195-byte `wpa2:` text bound. The foreground owner moved to
-`crates/tunnel-android`; shared policy is in `crates/tunnel-core`. Transport remains
-0.37.0 at the exact reviewed revision with reviewed patches 0003–0005.
-
-## Repeat after cleanup
-
-1. Stop any old session. Outside the agent sandbox, from the repository root:
-
-   ```sh
-   bash apps/android-controller/native-build.sh
-   ```
-
-   Use the installed NDK or `ANDROID_NDK_HOME`. The locked/offline build stages
-   the checked arm64 library and a fresh source/artifact receipt. Do not bypass
-   stale receipt errors. Report build failures without secret material.
-
-2. Open `apps/android-controller` in Android Studio, Sync, and perform a full
-   **Run app** on the arm64 phone. Do not use Apply Changes. Check camera permission
-   requires another Connect, and cancelling/backgrounding scanning does not connect.
-
-3. Build the [CLI](CLI.md), start the disposable application on
-   port 3002, and start a fresh helper/QR. Try same-Wi-Fi Direct first.
-
-4. For Relay, agree on the participant **before traffic**. The previously approved
-   service is `207.148.94.42:10000`; host test success does not approve other public
-   participants. Start a fresh helper with `--relay`, then test the phone on cellular.
-   No public relay is deployed or operated by these instructions.
-
-5. On each route check HTTP/scripts/API writes, cookies/local redirects, SSE and
-   WebSockets. Confirm the displayed route, browser reopen, background/foreground
-   behavior, and Stop through both app and notification. Stop must close access.
-   Reconnect only explicitly with a fresh helper and fresh QR.
-
-Never put live QRs or grants into screenshots, clipboard, logs, files, preferences,
-saved state or Intents. Use the in-app scanner, not Brave's generic QR scanner.
-Record only route, nonsecret failure stage and observed behavior.
-
-Observer failure is terminal even if a LAN path might work. Shared public IP is only
-a hint; no subnet guessing, implicit dual-stack/NAT64, discovery or universal NAT
-success is promised. Do not weaken authentication/fallback to make a trial pass.
-Performance diagnosis and new routing features are deferred until after the MVP.
+Keep live offers out of argv, logs, files and screenshots. Use only a trusted terminal to transfer the text to the hidden prompt and the in-app scanner for QR. No test establishes universal NAT reachability.

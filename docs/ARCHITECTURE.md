@@ -4,15 +4,17 @@
 [Validation status](STATUS.md)
 
 **The short version:** thepeer puts an authenticated, encrypted connection between
-a phone-side HTTP gateway and a computer-side localhost forwarder. Saorsa provides
+an Android or desktop loopback HTTP gateway and a sharing computer's localhost forwarder. Saorsa provides
 the underlying peer transport, cryptography and optional relay mechanism. Thepeer
 provides pairing, route policy, application authorization, browser integration and
 session ownership.
 
-The diagram below describes Android browser pairing. For terminal-to-terminal
-sharing, `thepeer connect` replaces the Android app: it receives the same one-shot
-offer through a hidden terminal prompt, authenticates the host and runs the same
-loopback HTTP gateway on the user's computer. It does not provide a shell, VPN or
+The diagram below describes Android browser pairing. The sharing CLI shows the
+text offer by default; `r` displays the same offer as a QR and `t` returns to text.
+For terminal-to-terminal sharing, `thepeer connect` on a computer with a matching
+binary replaces the Android app: it receives the one-shot offer through a hidden
+terminal prompt, authenticates the host and runs a loopback-only HTTP gateway on
+the browsing computer. The first peer to connect consumes the offer. It does not provide a shell, VPN or
 unrestricted TCP forwarding. Hosted release/signing and physical validation remain
 separate gates; see [release readiness](RELEASE-READINESS.md).
 
@@ -77,7 +79,8 @@ Both applications share the core; the core's `host` feature enables desktop-only
 CLI functionality.
 
 - **[CLI](../crates/cli/src/main.rs):** Parse target/participant options, select a
-  local interface, prepare the CLI, display a live terminal QR and handle terminal Stop.
+  local interface, prepare the share CLI, show text/QR offers and handle terminal Stop;
+  `connect` accepts a hidden offer and owns the desktop loopback browser gateway.
 - **[Android app](../apps/android-controller/):** Connect/Stop UI, bounded camera
   scanning, in-memory handoff, foreground notification and browser launch. ZXing
   decodes QR symbols; our code validates the offer.
@@ -173,7 +176,7 @@ separate services:
 ### Target resolution at CLI startup
 
 On the computer, the CLI RESOLVES THE TARGET ONCE AT STARTUP, before publishing
-the pairing QR.
+the pairing offer.
 
 ```text
   thepeer share localhost:3000
@@ -189,7 +192,7 @@ the pairing QR.
            │ yes
            ▼
   ┌───────────────────────────────────────────────┐
-  │ Save addresses + port → finish setup → QR     │
+  │ Save addresses + port → setup → text/QR offer  │
   └───────────────────────────────────────────────┘
 ```
 
@@ -201,7 +204,7 @@ validation limits, deadlines and connection behavior.
 
 The observer and relay below are separate **roles**, not necessarily separate servers.
 Each exchange happens only when its role is configured. With `--relay`, allocation
-happens before displaying the QR—even if Direct later succeeds. “Direct first”
+happens before displaying the offer—even if Direct later succeeds. “Direct first”
 refers to selecting the application traffic route, not delaying relay preparation.
 
 ```text
@@ -213,10 +216,10 @@ CLI                         Observer role                 Relay role
       |-- request relay allocation --------------------------->|
       |<-- reserved relay IP:port + carrier connection --------|
       |
-      | Prepare QR with computer key pin, grant and route hints
+      | Prepare text/QR offer with computer key pin, grant and route hints
       | (include observer address and relay contact if available)
       v
-   Phone scans QR
+   Phone scans QR or desktop connect pastes text at a hidden prompt
       |
       |-- what address am I? ---->|
       |<-- observed IP:port ------|
@@ -226,7 +229,7 @@ CLI                         Observer role                 Relay role
 
 ### Peer authentication and application access
 
-The connection below is between phone and computer, either directly or through
+The connection below is between browsing peer (phone or desktop) and sharing computer, either directly or through
 the separately prepared relay. The observer is not in the application data path.
 
 ```text
@@ -257,12 +260,13 @@ A service acting as a relay performs that separate forwarding role too.
 The relay service address, observed CLI address and allocated relay contact
 have different roles and must not be interchanged.
 
-The QR is an **out-of-band bearer capability**, not just a server URL. It contains
-both the intended computer's pin and a fresh one-shot grant. Keep it out of logs,
-files, clipboard, screenshots, preferences and Intents. Android transfers it through
+The text/QR offer is an **out-of-band bearer capability**, not just a server URL. It contains
+both the intended sharing computer's pin and a fresh one-shot grant. Never pass
+it in argv or put it in logs, files, screenshots, preferences or Intents. Copy
+text only through a trusted channel to the hidden `connect` prompt. Android transfers it through
 memory; service Intents carry only a nonsecret generation identifier.
 
-The phone's browser origin has a fresh 128-bit nonce:
+The browsing peer's loopback browser origin has a fresh 128-bit nonce:
 `thepeer-<32 lowercase hex digits>.localhost`. This separates browser origins across
 sessions; it is not a public DNS name or the tunnel's application grant.
 
@@ -394,7 +398,7 @@ RESPONSE — reverse direction of the same QUIC stream
     -> browser
 ```
 
-The phone gateway connects the browser's temporary session address to your local
+The Android or desktop gateway connects the browser's temporary session address to your local
 app. It has three main responsibilities:
 
 - **Check each request.** Only requests allowed for the current session are
@@ -416,8 +420,10 @@ requests are never replayed after connecting, see
 
 Admission, concurrent work, headers/bodies, per-stream byte forwarding and stalled
 operations are bounded. Those limits are **not** a healthy-session timer or a
-cumulative request-count ceiling. The first CLI TLS winner consumes the one-shot
-attempt; a hostile first winner can deny availability even without passing the grant.
+cumulative request-count ceiling. The first TLS winner consumes the one-shot attempt; a hostile first winner can deny
+availability even without passing the grant. A dev-server may start after pairing or
+restart without ending a healthy tunnel; in-flight HTTP/WebSocket work may fail.
+A tunnel disconnect does not reconnect automatically: pair with a fresh offer.
 
 ### What goes into a QUIC packet
 
@@ -441,7 +447,7 @@ not require a new TLS handshake; requests share the authorized QUIC connection.
 ## 7. Who owns Stop
 
 ```text
-Android Stop / service teardown       Terminal q / Ctrl-C
+Android Stop / service teardown       Either terminal q / Ctrl-C
               |                               |
       Native cancellation owner          CLI owner
               |                               |
