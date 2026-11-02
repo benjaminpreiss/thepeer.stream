@@ -3,11 +3,12 @@
 The target uses the flake-pinned themoss.net updater. A scheduled GitHub
 workflow opens lockfile PRs; after CI and required checks, the target fetches
 reviewed `main`, builds and switches. It does **not** run `nix flake update` on
-the server. The workflow-authorized maintainer installed the updated caller
-under `.github/workflows/` and removed the handoff directory. **CI must pass
-and a scheduled update must be exercised before claiming this works live.**
+the server. The toolkit pin has changed; a workflow-authorized maintainer must
+apply the staged caller in [`workflow-handoff/`](workflow-handoff/README.md) and
+remove that folder before merge. **CI must pass and a scheduled update must be
+exercised before claiming this works live.**
 
-The reusable workflow is pinned to [themoss.net `3074f7c`](https://github.com/benjaminpreiss/themoss.net/commit/3074f7c386b4a7d8c0b3a2cd2f7f72ef3d1f6768),
+The reusable workflow is pinned to [themoss.net `05f25bf`](https://github.com/benjaminpreiss/themoss.net/commit/05f25bf2e700deb55c59882d00e781a1e1583d07),
 which fixes Nix installation on GitHub runners. It runs the consumer-supplied
 `nix flake update` and compatible `cargo update`, tests the resulting relay and
 OS closure, audits the App permissions, opens a PR, and refuses auto-merge if
@@ -17,7 +18,7 @@ relaxation of deployment policy is outside automated lockfile updates.
 
 ## Configure the repository
 
-1. [Open this prefilled GitHub App creation form](https://github.com/settings/apps/new?name=thepeer-relay-lock-updates&description=Automated%20reviewed%20relay%20dependency%20updates&url=https%3A%2F%2Fgithub.com%2Fbenjaminpreiss%2Fthepeer.stream&public=false&webhook_active=false&request_oauth_on_install=false&contents=write&pull_requests=write)
+1. [Open this prefilled GitHub App creation form](https://github.com/settings/apps/new?name=thepeer-relay-lock-updates&description=Automated%20reviewed%20relay%20dependency%20updates&url=https%3A%2F%2Fgithub.com%2Fbenjaminpreiss%2Fthepeer.stream&public=false&webhook_active=false&contents=write&pull_requests=write)
    (or [edit an existing App](https://github.com/settings/apps)). Verify the
    form: private App, webhooks and OAuth-on-install disabled; repository
    **Contents** and **Pull requests** read/write, no Workflows,
