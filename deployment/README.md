@@ -1,38 +1,41 @@
-# Run your own MASQUE relay
+# Run a MASQUE relay on NixOS
 
-> ⚠️ **Pilot, not production-ready.** No real-server install, boot, rollback or cellular CLI/Android relay test has been completed. Start with a disposable x86_64 VM with **one empty whole disk** and **IPv4 DHCP**. `install` erases the selected disk; never use it to repair an installed machine.
+> ⚠️ **Pilot, not a production installer.** No real-server boot, rollback or cellular CLI/Android Relay test has been completed. Start with a disposable x86_64 machine with **one empty whole disk** and **IPv4 DHCP**. Only the toolkit's `install` command erases a disk; never reinstall to repair a host.
 
-The relay listens on **UDP 10000**. Open that port at your provider and restrict **SSH TCP 22** to operator IPs. Clients choose it explicitly with `--relay PUBLIC_IP:10000`; Direct-first routing is unchanged. Arrange console recovery and an off-host backup *before* installing.
+The relay listens on **UDP 10000**. Open it at your provider and restrict **SSH TCP 22** to operator IPs. Clients explicitly choose `--relay PUBLIC_IP:10000`; Direct-first routing is unchanged. Arrange console recovery and an off-host backup before installing.
 
-## What you need
+The [pinned themoss toolkit](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/deployment.md) owns discovery, staged build, disk confirmation, install and bootstrap. Its [update guide](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/updates.md) covers polling, transitions and recovery. **Read both before operating a host.** This repo supplies only relay-specific machine generation, the evaluated pre-erase check, the OS/relay modules and private host inputs.
 
-- An operator machine with Nix (flakes enabled), Bash, Git, SSH and `jq`. On macOS, configure a Linux Nix builder for the NixOS build, or use a Linux VM.
-- A rescue-booted target with root SSH, `ip` and `lsblk`. **Verify its SSH fingerprint out of band** via the provider console before connecting.
-- A reviewed, pushed checkout of this branch and an Ed25519 **public** SSH key. Never put private keys, password hashes or credentials in `machine.nix` or `facter.json`: Nix store inputs may be world-readable.
+## Relay-specific install inputs
 
-This repo owns the relay, OS/disk/network policy and the small [machine generator](scripts/generate-machine.sh). The [pinned themoss toolkit](../flake.nix) owns discovery, installation, bootstrap, polling and transitions. Private records in `generated/` are ignored by Git; back them up separately. CI uses only synthetic records and mocks.
+| Item | Value / operator decision |
+| --- | --- |
+| Target | x86_64; one whole disk (such as `/dev/vda`); IPv4 DHCP; provider-confirmed NIC/MAC. |
+| NixOS output | `relay` from this repository's pinned `flake.nix` and `flake.lock`. |
+| SSH access | An operator-owned Ed25519 **public** key; verify rescue and installed host fingerprints independently via console. |
+| Private files | Ignored `generated/record.json`, `machine.nix`, optional `facter.json` and install receipt. Back them up off-host. **Never** put credentials in Nix inputs; the store can be world-readable. |
+| Relay check | `deployment/scripts/check-machine.sh` compares the *staged* OS disk, boot mode and MAC to the discovered record. |
 
-## 1. Discover and review — no disk changes
+### Discover, generate and review (non-destructive)
 
-From the relay repo root, choose the **whole disk yourself** after checking the provider console. The shared toolkit discovers the architecture, boot mode, disk identity and default-route NIC/MAC; it refuses ambiguous routes and non-disks.
+From this reviewed checkout, with Nix (flakes), Bash, Git, SSH and `jq` installed:
 
 ```bash
 source deployment/scripts/toolkit.sh
-mkdir -m 700 generated  # do not replace an existing private directory
+mkdir -m 700 generated  # stop if private state already exists
 bash "$toolkit_dir/toolkit/deploy.sh" discover root@HOST /dev/vda generated/record.json
 bash deployment/scripts/generate-machine.sh "$PWD/generated/record.json" ~/.ssh/id_ed25519.pub relay-host
 bash "$toolkit_dir/toolkit/deploy.sh" preflight generated/record.json
 bash deployment/scripts/check-machine.sh "$PWD" relay generated/record.json
 ```
 
-The relay generator requires explicit confirmation of IPv4 DHCP; static/IPv6-only networks are unsupported. **Stop and inspect** both `generated/record.json` and `generated/machine.nix` against the console: host, whole disk, boot mode, NIC/MAC, DHCP and SSH key. The generator rejects unsupported architecture/layout; the relay check compares the *evaluated* OS disk/boot/MAC against the record. Optional `generated/facter.json` must also be reviewed and credential-free; no hardware report is generated automatically. Check your storage/network drivers and back up `generated/` off-host.
+The generator prompts for **IPv4 DHCP confirmation** and rejects unsupported records. Compare target, whole disk, boot mode, NIC/MAC, DHCP and SSH key with the provider console; do not guess. A reviewed `generated/facter.json` is optional and must contain no secrets. Check boot drivers and back up private inputs. On macOS, the toolkit's operator shell needs a Linux Nix builder (or use a Linux VM); run its [operator smoke test](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/deployment.md#operator-environment) before installation.
 
-## 2. Install — destructive
+### Install the exact pushed commit (destructive)
 
-Commit and push the **exact** revision to install. Run the toolkit's [pinned operator shell](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/deployment.md) smoke test first. Copy the relay check to an executable **ignored** path; this keeps the reviewed Git checkout clean:
+Commit/push the reviewed branch. Make an executable *ignored* copy of the relay check so Git stays clean; then use the toolkit's [pinned operator shell](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/deployment.md#operator-environment):
 
 ```bash
-nix develop --no-write-lock-file "path:$toolkit_dir#operator" --command bash "$toolkit_dir/tests/operator-smoke.sh"
 install -m 0700 deployment/scripts/check-machine.sh generated/check-machine.sh
 cmp deployment/scripts/check-machine.sh generated/check-machine.sh
 nix develop --no-write-lock-file "path:$toolkit_dir#operator" --command \
@@ -41,11 +44,11 @@ nix develop --no-write-lock-file "path:$toolkit_dir#operator" --command \
   generated/install-receipt.json - - "$PWD/generated/check-machine.sh"
 ```
 
-The shared installer checks the clean checkout against the **pushed branch tip**, stages/builds that commit, runs our check on the *staged* flake, re-probes the target and asks you to type `ERASE /dev/vda`. **Only this command runs Disko/nixos-anywhere.** It writes `generated/install-receipt.json` *after* installation succeeds; back it up off-host. If install succeeds but the receipt is lost, stop and inspect via console—**do not reinstall** just to recreate it.
+**Stop before typing `ERASE /dev/vda`** unless the target, whole disk, backup and console access are independently confirmed. The toolkit builds and checks the *staged* flake, re-probes the disk, and writes `generated/install-receipt.json` only after a successful install. Back up the receipt. If it is lost after installation, **do not reinstall** to recreate it; see the upstream [recovery guidance](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/deployment.md#2-install-the-pushed-commit).
 
-## 3. Verify the new key, then bootstrap
+### Verify the new SSH key and bootstrap
 
-The installed host has a **new** SSH key. Verify its fingerprint through the console *before* updating `known_hosts`. From the same operator checkout and private files:
+After boot, verify the **new** host fingerprint via provider console before updating `known_hosts`:
 
 ```bash
 bash "$toolkit_dir/toolkit/deploy.sh" bootstrap generated/install-receipt.json "$PWD" \
@@ -53,20 +56,11 @@ bash "$toolkit_dir/toolkit/deploy.sh" bootstrap generated/install-receipt.json "
   /var/lib/thepeer-relay/update
 ```
 
-Bootstrap checks receipt hashes, uploads private files, clones the exact installed commit and writes the root-only revision **last**. Retry interrupted uploads; conflicting state needs investigation, not a reinstall. The timer exists from first boot but fails closed before bootstrap. Bootstrap pins `commit:INSTALLED_SHA`, so later polls do **no fetch, build or switch**, even if `main` advances.
+Bootstrap pins `commit:INSTALLED_SHA` in the root-owned state. The daily timer exists but **cannot fetch/build/switch** until an operator explicitly selects a branch. Check SSH, provider firewall, `thepeer-relay`, CLI + Android over real cellular Relay, and normal Direct *before* enabling updates. No live validation has been performed for this PR.
 
-**Validate before tracking a branch:** SSH, provider firewall, `systemctl status thepeer-relay themoss-update.timer`, `journalctl -u thepeer-relay -b`, CLI and Android over real cellular Relay, and normal Direct. No live validation has been performed for this PR.
+## Opt in to reviewed updates
 
-## 4. Choose what the timer follows
-
-The root-owned `/var/lib/thepeer-relay/update/selector` is independent of fetched source:
-
-| Selector | Poll result |
-| --- | --- |
-| `commit:FULL_SHA` | Stay pinned; do not fetch, build or switch. |
-| `branch:NAME` | Fetch **only that branch**; build and verify the pushed tip before switching. |
-
-Protect a tracked branch with review and CI: a merge to it can change root-level OS code. On the target **as root**, after validating the installed candidate and its ancestry, explicitly opt in to `main`:
+The [shared selector policy](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/updates.md) keeps a commit pinned or polls **only** the protected branch chosen on the target. On the host **as root**, after validating its installed commit and branch ancestry:
 
 ```bash
 toolkit=$(nix eval --raw --impure --expr \
@@ -75,20 +69,4 @@ bash "$toolkit/toolkit/deploy.sh" deploy /var/lib/thepeer-relay/source branch:ma
   /var/lib/thepeer-relay/private relay /var/lib/thepeer-relay/update
 ```
 
-Ordinary polling/deploy refuses divergent history. To adopt a squash/rebase or a reviewed private `machine.nix` change, prepare a separate **credential-free** `REVIEWED_MACHINE_DIR/machine.nix` (mode 0600), verify the target and new branch, then explicitly authorize a *non-destructive, receipt-bound* transition from the operator machine:
-
-```bash
-bash "$toolkit_dir/toolkit/deploy.sh" transition generated/install-receipt.json \
-  root@HOST /var/lib/thepeer-relay/source main REVIEWED_MACHINE_DIR \
-  /var/lib/thepeer-relay/private relay /var/lib/thepeer-relay/update
-```
-
-It builds before switching and saves the proposed machine file, selector and revision only after a successful switch; it **never** runs Disko. The installed `facter.json` remains unchanged. A later rebaseline, after the receipt's baseline has changed, requires a separate reviewed procedure. Do not edit `selector` or `revision` to bypass safeguards.
-
-## Recovery and trust boundary
-
-- **Fetch/build fails:** the running generation and known-good state remain unchanged.
-- **Switch starts and fails:** services may be partly activated. The toolkit leaves `update/needs-inspection` to stop further automation. Stop the timer; inspect `journalctl -u themoss-update -n 100`, `nixos-rebuild list-generations`, running system, selector and revision. Recover via SSH/console and reconcile state *before* clearing the marker.
-- **Backup:** keep `generated/`, including the install receipt, off-host. NixOS generations are not off-host backups. Dependency updates come through reviewed lockfile PRs, never `nix flake update` on the server.
-
-See the pinned [toolkit update and recovery guide](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/updates.md) for the full selector and rollback contract.
+If history diverges (for example after a squash/rebase) or `machine.nix` needs a reviewed change, ordinary polling **fails closed**. Use the toolkit's explicit [non-destructive transition](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/updates.md#change-branches-after-a-squash-or-rebase) with your receipt, relay paths and a reviewed credential-free `machine.nix`; do not edit `selector` or `revision` by hand. Only a successful switch advances them. A failed switch can partly activate services and leaves `update/needs-inspection` blocking further automation; follow the upstream [recovery checklist](https://github.com/benjaminpreiss/themoss.net/blob/05f25bf2e700deb55c59882d00e781a1e1583d07/docs/updates.md#if-an-update-fails). NixOS generations are not off-host backups.
