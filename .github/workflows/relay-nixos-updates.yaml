@@ -15,9 +15,9 @@ concurrency:
 jobs:
   update:
     if: github.ref == 'refs/heads/main'
-    uses: benjaminpreiss/themoss.net/.github/workflows/lock-updates.yml@3074f7c386b4a7d8c0b3a2cd2f7f72ef3d1f6768
+    uses: benjaminpreiss/themoss.net/.github/workflows/lock-updates.yml@05f25bf2e700deb55c59882d00e781a1e1583d07
     with:
-      toolkit-revision: '3074f7c386b4a7d8c0b3a2cd2f7f72ef3d1f6768'
+      toolkit-revision: '05f25bf2e700deb55c59882d00e781a1e1583d07'
       app-policy-file: '.github/app-permissions.json'
       update-command: 'nix flake update && rustup toolchain install 1.95.0 --profile minimal && cargo +1.95.0 update'
       test-command: 'bash deployment/tests/integration.sh'
